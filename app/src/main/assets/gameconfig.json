@@ -1,0 +1,51 @@
+[
+    {
+        "id": 101,
+        "gameid": "2000",
+        "pubid": 221,
+        "ret": 1,
+        "name": "Merge Heroes",
+        "icon": "gamesicon/MergeHeroes.png",
+        "rating": 94,
+        "gameRes": "MergeHeroes",
+        "info": "指挥近战战士和远程弓箭手对抗敌人。通过合并现有角色解锁强大新角色。根据能力放置角色赢得胜利。",
+        "diff": 2,
+        "download": "https://app.gameslog.top/gameszip/MergeHeroes.zip",
+        "downicon": "https://app.gameslog.top/downicon/MergeHeroes.png",
+        "patch": 8,
+        "size": "58MB",
+        "categories": [
+            "策略",
+            "角色扮演"
+        ],
+        "tags": [
+            "热门",
+            "推荐"
+        ],
+        "timestamp": "2025-03-28T01:37:32Z"
+    },
+    {
+        "id": 102,
+        "gameid": "2336",
+        "pubid": 221,
+        "ret": 1,
+        "name": "The Nut Breaker",
+        "icon": "gamesicon/TheNutBreaker.png",
+        "rating": 87,
+        "gameRes": "TheNutBreaker",
+        "info": "一款分类坚果的游戏，可以缓解压力和焦虑。按颜色对各种坚果进行分类，在过程中放松身心。",
+        "diff": 1,
+        "download": "https://app.gameslog.top/gameszip/TheNutBreaker.zip",
+        "downicon": "https://app.gameslog.top/downicon/TheNutBreaker.png",
+        "patch": 9,
+        "size": "32MB",
+        "categories": [
+            "休闲",
+            "解谜"
+        ],
+        "tags": [
+            "推荐"
+        ],
+        "timestamp": "2025-03-28T09:43:03Z"
+    }
+]
