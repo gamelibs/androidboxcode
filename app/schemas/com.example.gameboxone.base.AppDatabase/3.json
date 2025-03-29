@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "ef10f66c3762cefa74da74eb63016ade",
+    "identityHash": "012ad92af1ac12941676f2806c1f4162",
     "entities": [
       {
         "tableName": "app_config",
@@ -38,7 +38,7 @@
       },
       {
         "tableName": "game_config",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `gameId` TEXT NOT NULL, `pubId` INTEGER NOT NULL, `ret` INTEGER NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `rating` INTEGER NOT NULL, `gameRes` TEXT NOT NULL, `info` TEXT, `diff` INTEGER NOT NULL, `download` TEXT NOT NULL, `downicon` TEXT, `patch` INTEGER NOT NULL, `timestamp` TEXT, `isLocal` INTEGER NOT NULL, `localPath` TEXT, `size` TEXT, `categories` TEXT NOT NULL, `tags` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `gameId` TEXT NOT NULL, `pubId` INTEGER NOT NULL, `ret` INTEGER NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `rating` INTEGER NOT NULL, `gameRes` TEXT NOT NULL, `info` TEXT, `diff` INTEGER NOT NULL, `download` TEXT NOT NULL, `downicon` TEXT, `patch` INTEGER NOT NULL, `timestamp` TEXT, `isLocal` INTEGER NOT NULL, `localPath` TEXT NOT NULL, `size` TEXT NOT NULL, `categories` TEXT NOT NULL, `tags` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -134,13 +134,13 @@
             "fieldPath": "localPath",
             "columnName": "localPath",
             "affinity": "TEXT",
-            "notNull": false
+            "notNull": true
           },
           {
             "fieldPath": "size",
             "columnName": "size",
             "affinity": "TEXT",
-            "notNull": false
+            "notNull": true
           },
           {
             "fieldPath": "categories",
@@ -168,7 +168,7 @@
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ef10f66c3762cefa74da74eb63016ade')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '012ad92af1ac12941676f2806c1f4162')"
     ]
   }
 }

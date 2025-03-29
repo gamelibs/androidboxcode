@@ -97,12 +97,10 @@ fun MainScreen(
                     NavGraphBuilders.bottomNavItems.forEach { screen ->
                         NavigationBarItem(
                             icon = {
-                                screen.icon()?.let { icon ->
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = screen.title
-                                    )
-                                }
+                                Icon(
+                                    imageVector = screen.icon(),
+                                    contentDescription = screen.title
+                                )
                             },
                             label = { Text(screen.title) },
                             selected = currentRoute == screen.route,
@@ -214,10 +212,10 @@ fun MainScreen(
                 }
                 
                 // 游戏详情页带动画
-                gameDetailNavGraph(navController)
+                gameDetailNavGraph()
                 
                 // 游戏玩家页带动画
-                gamePlayerNavGraph(navController)
+                gamePlayerNavGraph()
             }
 
             // 全局加载指示器

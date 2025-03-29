@@ -2,8 +2,8 @@ package com.example.gameboxone.di
 
 import android.content.Context
 import androidx.room.Room
-import com.example.gameboxone.Manager.EventManager
-import com.example.gameboxone.Manager.WebServerManager
+import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.WebServerManager
 import com.example.gameboxone.base.AppDatabase
 import com.example.gameboxone.service.MessageService
 import dagger.Module

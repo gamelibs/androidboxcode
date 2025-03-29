@@ -45,7 +45,6 @@ import kotlinx.coroutines.flow.onEach
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun GameDetailScreen(
-    navController: NavController, // 保留参数但不直接使用它
     viewModel: GameDetailViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
@@ -221,7 +220,7 @@ private fun EmptyContent(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            imageVector = Icons.Default.Warning,
+            imageVector = icon,
             contentDescription = "警告",
             modifier = Modifier.size(48.dp),
             tint = MaterialTheme.colorScheme.error
@@ -230,7 +229,7 @@ private fun EmptyContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "未找到游戏信息",
+            text = title,
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurface
         )
@@ -238,7 +237,7 @@ private fun EmptyContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "请检查游戏ID是否正确",
+            text = message,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

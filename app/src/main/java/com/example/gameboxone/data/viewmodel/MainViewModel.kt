@@ -3,7 +3,7 @@ package com.example.gameboxone.data.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gameboxone.Manager.EventManager
+import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.navigation.NavigationEvent

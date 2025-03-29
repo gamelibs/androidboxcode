@@ -1,4 +1,4 @@
-package com.example.gameboxone.Manager
+package com.example.gameboxone.manager
 
 import android.util.Log
 import com.example.gameboxone.event.GameEvent

@@ -73,40 +73,12 @@ sealed class Custom{
         var description: String,
         var downloadUrl: String,
         var isLocal: Boolean,
-        var localPath: String?
+        var localPath: String
     )
 
     companion object {
         fun ToBaseData(id: String,name: String,iconUrl: String): baseGameData {
-            return baseGameData(id,name, iconUrl)
-        }
-
-        fun ToHotData(
-            id: String,
-            gameId: String?,
-            name: String,
-            iconUrl: String,
-            gameRes: String,
-            rating: Int = 0,
-            patch: Int = 1,
-            description: String,
-            downloadUrl: String,
-            isLocal: Boolean,
-            localPath: String?
-        ): HotGameData {
-            return HotGameData(
-                id,
-                gameId,
-                name,
-                iconUrl,
-                gameRes,
-                rating,
-                patch,
-                description,
-                downloadUrl,
-                isLocal,
-                localPath
-            )
+            return baseGameData(id, name, iconUrl)
         }
     }
     /**
@@ -130,7 +102,7 @@ sealed class Custom{
                     iconUrl = "R.drawable.ic_game_default",
                     downloadUrl = "https://example.com/games/test1.zip",
                     isLocal = false,
-                    localPath = null
+                    localPath = ""
                 ),
                 HotGameData(
                     id = "2",
@@ -141,7 +113,7 @@ sealed class Custom{
                     iconUrl = "R.drawable.ic_game_default",
                     downloadUrl = "https://example.com/games/test2.zip",
                     isLocal = false,
-                    localPath = null
+                    localPath = "null"
                 ),
                 HotGameData(
                     id = "3",
@@ -152,7 +124,7 @@ sealed class Custom{
                     iconUrl = "R.drawable.ic_game_default",
                     downloadUrl = "https://example.com/games/test3.zip",
                     isLocal = false,
-                    localPath = null
+                    localPath = "null"
                 )
             )
             val playerList = listOf(

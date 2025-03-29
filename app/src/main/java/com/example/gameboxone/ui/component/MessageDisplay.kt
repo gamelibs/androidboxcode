@@ -96,8 +96,36 @@ private fun InfoMessage(
     message: UiMessage,
     onDismiss: () -> Unit
 ) {
-    // 显示普通消息
-    // ...实现普通消息的显示逻辑...
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+
+            Text(
+                text = message.message,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(horizontal = 16.dp)
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Button(
+                    onClick = {
+                        onDismiss()
+                    }
+                ) {
+                    Text("确定")
+                }
+            }
+        }
+        }
 }
 
 /**

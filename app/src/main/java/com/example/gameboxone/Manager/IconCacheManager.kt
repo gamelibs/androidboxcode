@@ -1,4 +1,4 @@
-package com.example.gameboxone.Manager
+package com.example.gameboxone.manager
 
 import android.content.Context
 import android.graphics.Bitmap

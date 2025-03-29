@@ -4,8 +4,8 @@ import android.app.Application
 import android.content.Intent
 import android.util.Log
 import android.widget.Toast
-import com.example.gameboxone.Manager.DataManager
-import com.example.gameboxone.Manager.SdkManager
+import com.example.gameboxone.manager.DataManager
+import com.example.gameboxone.manager.SdkManager
 import com.example.gameboxone.ui.CrashHandlerActivity
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope

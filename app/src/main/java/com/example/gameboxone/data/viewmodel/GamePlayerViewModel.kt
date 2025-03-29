@@ -3,9 +3,9 @@ package com.example.gameboxone.data.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gameboxone.Manager.EventManager
-import com.example.gameboxone.Manager.ResourceManager
-import com.example.gameboxone.Manager.WebServerManager
+import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.ResourceManager
+import com.example.gameboxone.manager.WebServerManager
 import com.example.gameboxone.data.state.GamePlayerUiState
 import com.example.gameboxone.event.GameEvent
 import dagger.hilt.android.lifecycle.HiltViewModel

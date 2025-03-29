@@ -25,8 +25,8 @@ data class GameConfigItem(
     val patch: Int = 0,                   // 补丁版本
     val timestamp: String? = null,        // 更新时间戳
     val isLocal: Boolean = false,         // 是否已下载到本地
-    val localPath: String? = null,        // 本地存储路径
-    val size: String? = null,             // 游戏大小
+    val localPath: String = "",        // 本地存储路径
+    val size: String = "",             // 游戏大小
     val categories: List<String> = emptyList(), // 游戏分类
     val tags: List<String> = emptyList()        // 游戏标签
 )

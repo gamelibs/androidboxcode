@@ -3,9 +3,9 @@ package com.example.gameboxone.data.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.gameboxone.Manager.DataManager
-import com.example.gameboxone.Manager.EventManager
-import com.example.gameboxone.Manager.IconCacheManager
+import com.example.gameboxone.manager.DataManager
+import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.IconCacheManager
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.service.MessageService
@@ -59,7 +59,7 @@ class HomeViewModel @Inject constructor(
                     is DataEvent.DataLoaded -> {
                         _uiState.value = _uiState.value.copy(isLoading = false)
                     }
-                    else->null
+                    else->{}
                 }
             }
         }

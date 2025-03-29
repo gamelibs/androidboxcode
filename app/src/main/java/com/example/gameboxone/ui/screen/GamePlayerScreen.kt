@@ -24,7 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.example.gameboxone.Manager.EventManager
+import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.data.viewmodel.GamePlayerViewModel
 import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.utils.WebGLHelper
@@ -56,7 +56,7 @@ fun GamePlayerScreen(
             }
 
             // 使用WebGLHelper预先配置WebGL环境
-            WebGLHelper.configureWebViewForWebGL(WebView(context))
+//            WebGLHelper.configureWebViewForWebGL(WebView(context))
         } catch (e: Exception) {
             Log.e(TAG, "创建WebView缓存目录或配置WebGL失败", e)
         }
@@ -91,8 +91,7 @@ fun GamePlayerScreen(
                 // WebGL必要设置
                 allowFileAccess = true
                 allowContentAccess = true
-                allowFileAccessFromFileURLs = true
-                allowUniversalAccessFromFileURLs = true
+
 
                 // 缓存设置
                 cacheMode = WebSettings.LOAD_NO_CACHE

@@ -13,9 +13,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gameboxone.data.model.Custom
-import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.ui.screen.GameDetailScreen
-import com.example.gameboxone.ui.screen.HomeScreen
 import androidx.compose.runtime.LaunchedEffect
 import com.example.gameboxone.ui.screen.GamePlayerScreen
 import java.net.URLDecoder
@@ -38,8 +36,6 @@ object NavGraphBuilders {
         const val MY_GAME = "myGame"
         const val RANKING = "ranking"
         const val SETTING = "setting"
-        const val GAME_DETAIL = "gameDetail/{gameId}"
-        const val GAME_PLAYER = "gamePlayer/{gameId}?path={path}"
     }
 
 
@@ -91,51 +87,10 @@ object NavGraphBuilders {
     }
 }
 
-///**
-// * 首页导航图
-// */
-//fun NavGraphBuilder.homeNavGraph(
-//    navController: NavController,
-//    onGameSelected: (GameConfigItem) -> Unit = {}
-//) {
-//    composable(route = NavGraphBuilders.Routes.HOME) {
-//        HomeScreen(
-//            onGameSelected = onGameSelected
-//        )
-//    }
-//}
-//
-///**
-// * 我的游戏导航图
-// */
-//fun NavGraphBuilder.myGameNavGraph(navController: NavController) {
-//    composable(route = NavGraphBuilders.Routes.MY_GAME) {
-//        // TODO: 实现我的游戏页面
-//    }
-//}
-//
-///**
-// * 排行榜导航图
-// */
-//fun NavGraphBuilder.rankingNavGraph(navController: NavController) {
-//    composable(route = NavGraphBuilders.Routes.RANKING) {
-//        // TODO: 实现排行榜页面
-//    }
-//}
-//
-///**
-// * 设置导航图
-// */
-//fun NavGraphBuilder.settingNavGraph(navController: NavController) {
-//    composable(route = NavGraphBuilders.Routes.SETTING) {
-//        // TODO: 实现设置页面
-//    }
-//}
-
 /**
  * 游戏详情导航图
  */
-fun NavGraphBuilder.gameDetailNavGraph(navController: NavController) {
+fun NavGraphBuilder.gameDetailNavGraph() {
     Log.d(TAG, "构建游戏详情导航图")
 
     composable(
@@ -189,7 +144,6 @@ fun NavGraphBuilder.gameDetailNavGraph(navController: NavController) {
         }
         
         GameDetailScreen(
-            navController = navController,
             viewModel = viewModel
         )
     }
@@ -198,7 +152,7 @@ fun NavGraphBuilder.gameDetailNavGraph(navController: NavController) {
 /**
  * 游戏播放器导航图
  */
-fun NavGraphBuilder.gamePlayerNavGraph(navController: NavController) {
+fun NavGraphBuilder.gamePlayerNavGraph() {
     Log.d(TAG, "构建游戏播放器导航图")
 
     composable(

@@ -27,12 +27,10 @@ fun MainBottomNavigation(
 
             NavigationBarItem(
                 icon = {
-                    screen.icon()?.let { icon ->
-                        Icon(
-                            imageVector = icon,
-                            contentDescription = screen.title
-                        )
-                    }
+                    Icon(
+                        imageVector = screen.icon(),
+                        contentDescription = screen.title
+                    )
                 },
                 label = { Text(screen.title) },
                 selected = selected,

@@ -1,4 +1,4 @@
-package com.example.gameboxone.Manager
+package com.example.gameboxone.manager
 
 import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
@@ -156,28 +156,28 @@ class DataManager @Inject constructor(
                                     GameConfigItem(
                                         id = item.id,
                                         // 确保驼峰命名字段映射正确
-                                        gameId = item.gameId ?: "",  // JSON中的gameid映射到gameId
+                                        gameId = item.gameId,  // JSON中的gameid映射到gameId
                                         pubId = item.pubId,          // JSON中的pubid映射到pubId
                                         ret = item.ret,
-                                        name = item.name ?: "",
-                                        icon = item.icon ?: "",
+                                        name = item.name,
+                                        icon = item.icon,
                                         rating = item.rating,
-                                        gameRes = item.gameRes ?: "",
+                                        gameRes = item.gameRes,
                                         info = item.info,            // 允许为null
                                         diff = item.diff,
-                                        download = item.download ?: "",
+                                        download = item.download,
                                         downicon = item.downicon,    // 允许为null
                                         patch = item.patch,
                                         timestamp = item.timestamp,  // 允许为null
                                         size = item.size,            // 允许为null
 
                                         // 关键部分：确保集合字段不为null
-                                        categories = item.categories ?: emptyList(),
-                                        tags = item.tags ?: emptyList(),
+                                        categories = item.categories,
+                                        tags = item.tags,
 
                                         // 其他字段使用默认值
                                         isLocal = false,
-                                        localPath = null
+                                        localPath = ""
                                     )
                                 }
 
@@ -311,11 +311,11 @@ class DataManager @Inject constructor(
                         // 处理可能的空值，避免空指针异常
                         val validConfigItems = configItems.map { item ->
                             item.copy(
-                                gameId = item.gameId.orEmpty(),
-                                name = item.name.orEmpty(),
-                                icon = item.icon.orEmpty(),
-                                gameRes = item.gameRes.orEmpty(),
-                                download = item.download.orEmpty()
+                                gameId = item.gameId,
+                                name = item.name,
+                                icon = item.icon,
+                                gameRes = item.gameRes,
+                                download = item.download
                             )
                         }
                         
@@ -545,11 +545,11 @@ class DataManager @Inject constructor(
                     // 处理可能的空值
                     val validConfigItems = configItems.map { item ->
                         item.copy(
-                            gameId = item.gameId.orEmpty(),
-                            name = item.name.orEmpty(),
-                            icon = item.icon.orEmpty(),
-                            gameRes = item.gameRes.orEmpty(),
-                            download = item.download.orEmpty()
+                            gameId = item.gameId,
+                            name = item.name,
+                            icon = item.icon,
+                            gameRes = item.gameRes,
+                            download = item.download
                         )
                     }
                     
@@ -583,7 +583,7 @@ class DataManager @Inject constructor(
     /**
      * 使缓存失效
      */
-    fun invalidateCache() {
+    private fun invalidateCache() {
         CoroutineScope(Dispatchers.IO).launch {
             cacheLock.withLock {
                 _gameConfigCache = null

@@ -22,7 +22,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
-import com.example.gameboxone.Manager.IconCacheManager
+import com.example.gameboxone.manager.IconCacheManager
 import com.example.gameboxone.R
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.model.GameConfigItem

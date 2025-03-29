@@ -3,9 +3,9 @@ package com.example.gameboxone.data.viewmodel
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
-import com.example.gameboxone.Manager.DataManager
-import com.example.gameboxone.Manager.EventManager
-import com.example.gameboxone.Manager.ResourceManager
+import com.example.gameboxone.manager.DataManager
+import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.ResourceManager
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.state.GameDetailState
@@ -104,7 +104,7 @@ class GameDetailViewModel @Inject constructor(
                         error = null
                     )
                     // 刷新时发送加载完成事件
-                    eventManager.emitGameEvent(GameEvent.GameLoaded(Custom.ToBaseData(game.id?:"101",game.name,game.iconUrl)))
+                    eventManager.emitGameEvent(GameEvent.GameLoaded(Custom.ToBaseData(game.id,game.name,game.iconUrl)))
                 } else {
                     handleError("未找到游戏数据")
                 }
@@ -128,17 +128,17 @@ class GameDetailViewModel @Inject constructor(
     /**
      * 处理游戏收藏
      */
-    fun toggleFavorite() {
-        viewModelScope.launch {
-            try {
-                val currentGame = state.value.game ?: return@launch
-                // TODO: 实现收藏逻辑
+//    fun toggleFavorite() {
+//        viewModelScope.launch {
+//            try {
+//                val currentGame = state.value.game ?: return@launch
+
 //                eventManager.emitGameEvent(GameEvent.GameFavoriteChanged(currentGame))
-            } catch (e: Exception) {
-                handleError("更改收藏状态失败：${e.message}")
-            }
-        }
-    }
+//            } catch (e: Exception) {
+//                handleError("更改收藏状态失败：${e.message}")
+//            }
+//        }
+//    }
 
     /**
      * 清理状态
@@ -233,7 +233,7 @@ class GameDetailViewModel @Inject constructor(
                                 )
                             )
 
-                        }.onFailure { error ->
+                        }.onFailure { _ ->
                             // 加载失败，需要从网络下载
                             handleNeedDownload(game)
                         }
@@ -319,7 +319,7 @@ class GameDetailViewModel @Inject constructor(
 
                 // 发送下载开始事件
                 state.value.game?.let { game ->
-                    emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id?:"101",game.name,game.iconUrl)))
+                    emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id,game.name,game.iconUrl)))
                 }
 
                 resourceManager.downloadAndInstallGame(
@@ -329,7 +329,7 @@ class GameDetailViewModel @Inject constructor(
                     // 更新下载进度
                     setState { copy(downloadProgress = progress) }
                     // ...发送进度事件
-                }.onSuccess { gamePath ->
+                }.onSuccess { _ ->
                     // 下载成功
                     setState {
                         copy(
@@ -341,7 +341,7 @@ class GameDetailViewModel @Inject constructor(
                     
                     // 发送完成事件
                     state.value.game?.let { game ->
-                        emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id?:"101",game.name,game.iconUrl)))
+                        emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id,game.name,game.iconUrl)))
                     }
                     // 下载完成后再次尝试启动游戏
                     launchGame()
@@ -362,7 +362,7 @@ class GameDetailViewModel @Inject constructor(
                     handleError("游戏下载失败: ${e.message}")
                     
                     // 发送下载失败事件
-                    state.value.game?.let { game ->
+                    state.value.game?.let { _ ->
                         emitGameEvent(GameEvent.Error.Network("游戏下载失败: ${e.message}"))
                     }
                 }
