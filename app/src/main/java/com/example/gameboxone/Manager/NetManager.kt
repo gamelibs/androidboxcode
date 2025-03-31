@@ -5,6 +5,7 @@ import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
+import android.os.Build
 import android.util.Log
 import com.example.gameboxone.data.model.GameConfigItem
 import com.google.gson.Gson
@@ -27,6 +28,7 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Request
 import kotlinx.coroutines.suspendCancellableCoroutine
+import okhttp3.internal.platform.Jdk9Platform.Companion.isAvailable
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -37,7 +39,7 @@ class NetManager @Inject constructor(
     private val TAG = "NetManager"
 
     // 默认超时设置
-    private val DEFAULT_TIMEOUT = 10 * 1000L // 10秒
+    private val DEFAULT_TIMEOUT = 60 * 1000L
 
     // 连接管理器延迟初始化
     private val connectivityManager by lazy {
@@ -47,6 +49,37 @@ class NetManager @Inject constructor(
     // 网络可用状态
     private var _isNetworkAvailable = AtomicBoolean(false)
     val isNetworkAvailable: Boolean get() = _isNetworkAvailable.get()
+
+    /**
+     * 实时检查当前网络连接状态
+     * 不依赖缓存的网络状态标志，而是直接查询系统
+     * @return 当前是否有可用网络连接
+     */
+    fun checkNetworkNow(): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        // Android 6.0+ (API 23+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val networkCapabilities = connectivityManager.activeNetwork ?: return false
+            val actNw = connectivityManager.getNetworkCapabilities(networkCapabilities) ?: return false
+            return when {
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
+                actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
+                else -> false
+            }
+        } else {
+            // 老版本Android
+            @Suppress("DEPRECATION")
+            val networkInfo = connectivityManager.activeNetworkInfo
+            @Suppress("DEPRECATION")
+            return networkInfo != null && networkInfo.isConnected
+        }
+
+        // 检测后更新缓存状态
+        _isNetworkAvailable.set(isAvailable)
+        return isAvailable
+    }
 
     // 创建OkHttpClient实例，配置超时和连接池
     private val httpClient = OkHttpClient.Builder()
@@ -116,9 +149,84 @@ class NetManager @Inject constructor(
     }
 
     /**
-     * 获取并解析游戏列表
-     * 支持自定义超时时间
+     * 获取并解析单个游戏信息
+     * @param id 游戏 ID
      */
+    suspend fun getGameIdInfo(id: String): Result<GameConfigItem> = withContext(Dispatchers.IO) {
+        // 先检查网络状态
+        if (!isNetworkAvailable) {
+            Log.e(TAG, "网络不可用，无法获取游戏信息")
+            return@withContext Result.failure(IOException("网络不可用"))
+        }
+
+        val url = "$BASE_URL/getGameIdInfo/$id"
+        var attempt = 0
+        var lastException: Exception? = null
+
+        while (attempt < MAX_RETRIES) {
+            try {
+                Log.d(TAG, "尝试获取游戏信息 (${attempt + 1}/$MAX_RETRIES): $url")
+
+                val request = Request.Builder()
+                    .url(url)
+                    .get()
+                    .build()
+
+                val response = suspendCancellableCoroutine<String> { continuation ->
+                    httpClient.newCall(request).enqueue(object : Callback {
+                        override fun onFailure(call: Call, e: IOException) {
+                            if (!continuation.isCompleted) {
+                                continuation.resumeWithException(e)
+                            }
+                        }
+
+                        override fun onResponse(call: Call, response: okhttp3.Response) {
+                            if (!continuation.isCompleted) {
+                                if (!response.isSuccessful) {
+                                    continuation.resumeWithException(IOException("HTTP ${response.code}"))
+                                    return
+                                }
+
+                                try {
+                                    val responseBody = response.body?.string()
+                                    if (responseBody != null) {
+                                        continuation.resume(responseBody)
+                                    } else {
+                                        continuation.resumeWithException(IOException("Empty response"))
+                                    }
+                                } catch (e: Exception) {
+                                    continuation.resumeWithException(e)
+                                }
+                            }
+                        }
+                    })
+
+                    continuation.invokeOnCancellation {
+                        httpClient.dispatcher.cancelAll()
+                    }
+                }
+
+                // 解析JSON
+                val gameInfo = parseJson<GameConfigItem>(response)
+                Log.d(TAG, "成功获取游戏信息: $gameInfo")
+                return@withContext Result.success(gameInfo)
+
+            } catch (e: Exception) {
+                lastException = e
+                Log.e(TAG, "获取游戏信息失败 (${attempt + 1}/$MAX_RETRIES): ${e.message}")
+                attempt++
+
+                if (attempt < MAX_RETRIES) {
+                    val delayTime = RETRY_DELAY_MILLIS * attempt
+                    Log.d(TAG, "等待 ${delayTime}ms 后重试")
+                    delay(delayTime)
+                }
+            }
+        }
+
+        Log.e(TAG, "获取游戏信息失败，已达到最大重试次数")
+        return@withContext Result.failure(lastException ?: IOException("未知错误"))
+    }
 
     /**
      * 获取并解析游戏列表

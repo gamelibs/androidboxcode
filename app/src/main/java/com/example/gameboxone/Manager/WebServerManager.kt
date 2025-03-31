@@ -20,61 +20,87 @@ class WebServerManager @Inject constructor(
     private val isRunning = AtomicBoolean(false)
     private var currentPort = 0
     private var rootDir: File? = null
-    
-    // 添加缺失的成员变量
+
     // MIME类型映射表
     private val mimeTypeMap: MutableMap<String, String> = mutableMapOf()
     // 安全头信息
     private val securityHeaders: MutableMap<String, String> = mutableMapOf()
-    
+
     init {
-        // 初始化基础MIME类型
         initDefaultMimeTypes()
-        // 初始化基础安全头
         initDefaultSecurityHeaders()
     }
-    
+
     /**
      * 初始化默认MIME类型
      */
     private fun initDefaultMimeTypes() {
-        // 基本类型
+        // 网页基础类型
         mimeTypeMap[".html"] = "text/html"
         mimeTypeMap[".js"] = "application/javascript"
         mimeTypeMap[".css"] = "text/css"
         mimeTypeMap[".json"] = "application/json"
+
+        // WebAssembly - 关键类型
         mimeTypeMap[".wasm"] = "application/wasm"
+
+        // 图片类型
         mimeTypeMap[".png"] = "image/png"
         mimeTypeMap[".jpg"] = "image/jpeg"
         mimeTypeMap[".jpeg"] = "image/jpeg"
         mimeTypeMap[".gif"] = "image/gif"
-
         mimeTypeMap[".svg"] = "image/svg+xml"
+        mimeTypeMap[".ico"] = "image/x-icon"
+
         // 字体
         mimeTypeMap[".woff"] = "font/woff"
         mimeTypeMap[".woff2"] = "font/woff2"
         mimeTypeMap[".ttf"] = "font/ttf"
         mimeTypeMap[".eot"] = "application/vnd.ms-fontobject"
         mimeTypeMap[".otf"] = "font/otf"
+
         // 媒体
         mimeTypeMap[".mp3"] = "audio/mpeg"
         mimeTypeMap[".mp4"] = "video/mp4"
-        mimeTypeMap[".wav"] = "video/wav"
+        mimeTypeMap[".wav"] = "audio/wav"
         mimeTypeMap[".webm"] = "video/webm"
         mimeTypeMap[".ogg"] = "application/ogg"
 
-        // 3D模型相关 - 添加.bin文件支持
+        // 3D模型 - WebGL必备
         mimeTypeMap[".bin"] = "application/octet-stream"
         mimeTypeMap[".gltf"] = "model/gltf+json"
         mimeTypeMap[".glb"] = "model/gltf-binary"
+
+        // WebGL着色器
+        mimeTypeMap[".glsl"] = "text/plain"
+        mimeTypeMap[".frag"] = "text/plain"
+        mimeTypeMap[".vert"] = "text/plain"
+
+        // 数据文件
+        mimeTypeMap[".dat"] = "application/octet-stream"
+        mimeTypeMap[".data"] = "application/octet-stream"
+        mimeTypeMap[".unityweb"] = "application/octet-stream"
     }
-    
+
     /**
-     * 初始化默认安全头
+     * 初始化安全头 - WebGL关键设置
      */
     private fun initDefaultSecurityHeaders() {
+        // CORS支持 - 必要
         securityHeaders["Access-Control-Allow-Origin"] = "*"
-        securityHeaders["Cache-Control"] = "no-cache, no-store, must-revalidate"
+        securityHeaders["Access-Control-Allow-Methods"] = "GET, OPTIONS"
+        securityHeaders["Access-Control-Allow-Headers"] = "Content-Type, Range"
+
+        // 跨域隔离策略 - WebGL必要
+        securityHeaders["Cross-Origin-Embedder-Policy"] = "require-corp"
+        securityHeaders["Cross-Origin-Opener-Policy"] = "same-origin"
+        securityHeaders["Cross-Origin-Resource-Policy"] = "cross-origin"
+
+        // 内容安全策略
+        securityHeaders["X-Content-Type-Options"] = "nosniff"
+
+        // 缓存控制 - 允许缓存大型资源
+        securityHeaders["Cache-Control"] = "max-age=86400"
     }
 
     /**
@@ -89,6 +115,7 @@ class WebServerManager @Inject constructor(
         }
 
         val rootDir = gameDir.parentFile ?: throw IllegalArgumentException("无法获取游戏目录的父目录")
+        this.rootDir = rootDir
         currentPort = findAvailablePort()
 
         try {
@@ -96,10 +123,6 @@ class WebServerManager @Inject constructor(
             server?.start()
             isRunning.set(true)
             Log.d(TAG, "本地服务器启动成功，端口: $currentPort, 根目录: ${rootDir.absolutePath}")
-
-            // 设置WebGL支持
-            setupWebGLSupport()
-
             return currentPort
         } catch (e: Exception) {
             Log.e(TAG, "启动本地服务器失败", e)
@@ -125,16 +148,14 @@ class WebServerManager @Inject constructor(
      * 查找可用端口
      */
     private fun findAvailablePort(): Int {
-        // 尝试常用端口，如果不可用则使用随机端口
         val preferredPorts = listOf(8080, 8081, 8082, 9090, 9091)
-        
+
         for (port in preferredPorts) {
             if (isPortAvailable(port)) {
                 return port
             }
         }
-        
-        // 使用随机端口
+
         return findRandomAvailablePort()
     }
 
@@ -161,121 +182,8 @@ class WebServerManager @Inject constructor(
             socket.close()
             port
         } catch (e: IOException) {
-            // 如果失败，使用默认端口
             8888
         }
-    }
-
-    /**
-     * 清理过期的缓存
-     * @param maxAge 最大缓存时间（毫秒）
-     */
-    fun cleanupCache(maxAge: Long = 7 * 24 * 60 * 60 * 1000) { // 默认7天
-        val cacheDir = File(context.getDir("games", Context.MODE_PRIVATE).path)
-        val now = System.currentTimeMillis()
-        
-        try {
-            cacheDir.listFiles()?.forEach { gameDir ->
-                // 跳过非目录文件
-                if (!gameDir.isDirectory) return@forEach
-                
-                // 检查游戏目录的最后修改时间
-                val lastModified = gameDir.lastModified()
-                if (now - lastModified > maxAge) {
-                    // 检查该目录是否正在使用
-                    val isActive = rootDir?.absolutePath == gameDir.absolutePath
-                    
-                    // 不删除当前正在使用的游戏目录
-                    if (!isActive) {
-                        Log.d(TAG, "清理过期缓存目录: ${gameDir.name}")
-                        gameDir.deleteRecursively()
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "清理缓存失败", e)
-        }
-    }
-
-    /**
-     * 检查并限制缓存大小
-     * @param maxSizeMB 最大缓存大小（MB）
-     */
-    fun limitCacheSize(maxSizeMB: Int = 500) {
-        val cacheDir = File(context.getDir("games", Context.MODE_PRIVATE).path)
-        val maxBytes = maxSizeMB * 1024 * 1024L
-        
-        try {
-            // 计算当前缓存大小
-            var totalSize = 0L
-            val gameDirs = cacheDir.listFiles()?.filter { it.isDirectory }?.sortedBy { it.lastModified() }
-            
-            gameDirs?.forEach { gameDir ->
-                totalSize += getDirSize(gameDir)
-            }
-            
-            // 如果缓存超过限制，从最旧的开始删除
-            if (totalSize > maxBytes && gameDirs != null) {
-                for (gameDir in gameDirs) {
-                    // 不删除当前正在使用的游戏目录
-                    val isActive = rootDir?.absolutePath == gameDir.absolutePath
-                    if (!isActive) {
-                        Log.d(TAG, "删除缓存以控制大小: ${gameDir.name}")
-                        val dirSize = getDirSize(gameDir)
-                        gameDir.deleteRecursively()
-                        totalSize -= dirSize
-                        
-                        if (totalSize <= maxBytes) break
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "限制缓存大小失败", e)
-        }
-    }
-    
-    /**
-     * 获取目录大小
-     */
-    private fun getDirSize(dir: File): Long {
-        var size = 0L
-        
-        try {
-            dir.listFiles()?.forEach { file ->
-                size += if (file.isDirectory) {
-                    getDirSize(file)
-                } else {
-                    file.length()
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "计算目录大小失败: ${dir.absolutePath}", e)
-        }
-        
-        return size
-    }
-
-    /**
-     * 处理WebGL专用的MIME类型和头信息
-     */
-    private fun setupWebGLSupport() {
-        // 注册处理WebGL相关资源的MIME类型
-        val webglMimeTypes = mapOf(
-            ".glsl" to "text/plain",
-            ".frag" to "text/plain",
-            ".vert" to "text/plain",
-            ".glb" to "model/gltf-binary",
-            ".gltf" to "model/gltf+json"
-        )
-        
-        // 添加到MIME类型映射
-        webglMimeTypes.forEach { (extension, mimeType) ->
-            mimeTypeMap[extension] = mimeType
-        }
-        
-        // 添加WebGL友好的安全头
-        securityHeaders["Cross-Origin-Embedder-Policy"] = "require-corp"
-        securityHeaders["Cross-Origin-Opener-Policy"] = "same-origin"
     }
 
     /**
@@ -285,22 +193,21 @@ class WebServerManager @Inject constructor(
         port: Int,
         private val rootDir: File
     ) : NanoHTTPD(port) {
-        
+
         override fun serve(session: IHTTPSession): Response {
             val uri = session.uri
-            
+
             try {
-                // 处理根路径请求，指向index.html
+                // 处理根路径或空路径请求，指向index.html
                 val requestedPath = if (uri == "/" || uri.isEmpty()) {
                     "/index.html"
                 } else {
                     uri
                 }
-                
-                
+
                 // 解析请求的文件路径
                 val file = File(rootDir, requestedPath)
-                
+
                 if (!file.exists()) {
                     Log.e(TAG, "文件不存在: ${file.absolutePath}")
                     return newFixedLengthResponse(
@@ -309,11 +216,17 @@ class WebServerManager @Inject constructor(
                         "404 文件未找到"
                     )
                 }
-                
+
                 // 获取MIME类型
                 val mimeType = getCustomMimeType(file.name)
-                
-                // 返回文件内容
+
+                // 处理范围请求 - 对大文件很重要
+                val rangeHeader = session.headers["range"]
+                if (rangeHeader != null) {
+                    return createRangeResponse(file, mimeType, rangeHeader)
+                }
+
+                // 标准响应
                 val fis = FileInputStream(file)
                 val response = newFixedLengthResponse(
                     Response.Status.OK,
@@ -321,14 +234,17 @@ class WebServerManager @Inject constructor(
                     fis,
                     file.length()
                 )
-                
-                // 添加WebGL兼容性头
+
+                // 添加所有安全头和WebGL支持头
                 securityHeaders.forEach { (key, value) ->
                     response.addHeader(key, value)
                 }
-                
+
+                // 添加范围请求支持 - 非常重要
+                response.addHeader("Accept-Ranges", "bytes")
+
                 return response
-                
+
             } catch (e: Exception) {
                 Log.e(TAG, "处理请求失败: $uri", e)
                 return newFixedLengthResponse(
@@ -338,19 +254,70 @@ class WebServerManager @Inject constructor(
                 )
             }
         }
-        
+
+        /**
+         * 处理范围请求 - 对于加载大型3D资源至关重要
+         */
+        private fun createRangeResponse(file: File, mimeType: String, rangeHeader: String): Response {
+            try {
+                val fileLength = file.length()
+
+                // 解析范围请求头
+                val range = rangeHeader.substringAfter("bytes=")
+                val rangeParts = range.split("-")
+
+                val start = rangeParts[0].toLongOrNull() ?: 0L
+                var end = rangeParts[1].toLongOrNull() ?: (fileLength - 1)
+
+                // 验证范围
+                if (start >= fileLength || start > end || end >= fileLength) {
+                    val response = newFixedLengthResponse(
+                        Response.Status.RANGE_NOT_SATISFIABLE,
+                        MIME_PLAINTEXT,
+                        "请求范围无效"
+                    )
+                    response.addHeader("Content-Range", "bytes */$fileLength")
+                    return response
+                }
+
+                // 创建范围响应
+                val contentLength = end - start + 1
+                val fis = FileInputStream(file)
+                fis.skip(start)
+
+                val response = newFixedLengthResponse(
+                    Response.Status.PARTIAL_CONTENT,
+                    mimeType,
+                    fis,
+                    contentLength
+                )
+
+                // 添加范围头
+                response.addHeader("Content-Range", "bytes $start-$end/$fileLength")
+                response.addHeader("Accept-Ranges", "bytes")
+
+                // 添加所有安全头
+                securityHeaders.forEach { (key, value) ->
+                    response.addHeader(key, value)
+                }
+
+                return response
+            } catch (e: Exception) {
+                Log.e(TAG, "处理范围请求失败", e)
+                return newFixedLengthResponse(
+                    Response.Status.INTERNAL_ERROR,
+                    MIME_PLAINTEXT,
+                    "500 处理范围请求失败: ${e.message}"
+                )
+            }
+        }
+
         /**
          * 获取文件的MIME类型
-         * 使用我们的自定义MIME类型映射
          */
         private fun getCustomMimeType(fileName: String): String {
-            // 获取文件扩展名
-            val extension = fileName.substringAfterLast('.', "")
-            if (extension.isEmpty()) return "application/octet-stream"
-            
-            // 先查找我们的映射
-            val extensionWithDot = ".$extension"
-            return mimeTypeMap[extensionWithDot.lowercase()] ?: "application/octet-stream"
+            val extension = "." + fileName.substringAfterLast('.', "").lowercase()
+            return mimeTypeMap[extension] ?: "application/octet-stream"
         }
     }
 }

@@ -166,7 +166,8 @@ fun MainScreen(
                                 )
                     }
                 ) {
-                    DefaultScreenContent("我的游戏", "该功能即将上线")
+                    MyGameScreen()
+                    //DefaultScreenContent("我的游戏", "该功能即将上线")
                 }
                 
                 // 排行榜（带动画）

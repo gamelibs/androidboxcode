@@ -1,13 +1,13 @@
 package com.example.gameboxone.manager
 
 import android.content.Context
-import android.database.sqlite.SQLiteConstraintException
 import android.util.Log
 import com.example.gameboxone.base.AppDatabase
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.event.DataEvent
+import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.service.MessageService
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -19,7 +19,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -38,8 +37,6 @@ class DataManager @Inject constructor(
 ) {
     private val TAG = "DataManager"
 
-    // 请求超时设置 (5秒)
-    private val NETWORK_TIMEOUT = 5000L
 
     // 配置文件目录
     private val configDir by lazy {
@@ -70,11 +67,9 @@ class DataManager @Inject constructor(
             Log.d(TAG, "开始预加载数据...")
             
             // 检查数据库和缓存状态
-            val gameCount = getGameCount()
-            if (gameCount == 0) {
+            if (getGameCount() == 0 &&  _gameConfigCache == null) {
                 Log.d(TAG, "数据库为空，强制从网络获取数据")
-                // 强制从网络加载，立即清空和重建数据库
-//                refreshAllData(true)
+
                 initializeData()
                 return
             }
@@ -135,107 +130,36 @@ class DataManager @Inject constructor(
             Log.d(TAG, "开始初始化基础数据")
 
             // 检查数据库中是否有游戏数据
-            val hasData = database.gameConfigDao().getCount() > 0
+            val hasData = getGameCount() > 0
 
             if (!hasData) {
                 Log.d(TAG, "数据库为空，开始获取游戏数据")
-                var dataLoaded = false
-                
-                // 1. 首先尝试从网络获取
-                if (netManager.isNetworkAvailable) {
-                    try {
-                        Log.d(TAG, "尝试从网络获取初始游戏数据")
-                        val result = netManager.getGameList()
-                        result.fold(
-                            onSuccess = { configItems ->
-                                Log.d(TAG, "从网络获取初始游戏数据成功：${configItems.size} 个游戏")
 
-                                // 处理数据转换，确保字段匹配和非空约束
-                                val processedItems = configItems.map { item ->
-                                    // 创建GameConfigItem对象，确保字段映射正确
-                                    GameConfigItem(
-                                        id = item.id,
-                                        // 确保驼峰命名字段映射正确
-                                        gameId = item.gameId,  // JSON中的gameid映射到gameId
-                                        pubId = item.pubId,          // JSON中的pubid映射到pubId
-                                        ret = item.ret,
-                                        name = item.name,
-                                        icon = item.icon,
-                                        rating = item.rating,
-                                        gameRes = item.gameRes,
-                                        info = item.info,            // 允许为null
-                                        diff = item.diff,
-                                        download = item.download,
-                                        downicon = item.downicon,    // 允许为null
-                                        patch = item.patch,
-                                        timestamp = item.timestamp,  // 允许为null
-                                        size = item.size,            // 允许为null
 
-                                        // 关键部分：确保集合字段不为null
-                                        categories = item.categories,
-                                        tags = item.tags,
+                val networkResult =  fetchGameConfigFromNetwork()
 
-                                        // 其他字段使用默认值
-                                        isLocal = false,
-                                        localPath = ""
-                                    )
-                                }
-
-                                try {
-                                    // 使用处理后的数据保存到数据库
-                                    database.gameConfigDao().insertAll(processedItems)
-
-                                    // 更新缓存状态...
-                                    dataLoaded = true
-                                    Log.d(TAG, "游戏数据已成功保存到数据库，共 ${processedItems.size} 条")
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "保存刷新数据失败", e)
-                                    // 记录更详细的错误信息
-                                    Log.e(TAG, "错误详情：${e.message}")
-                                    e.printStackTrace()
-                                    eventManager.emitDataEvent(DataEvent.Error("保存数据失败: ${e.message}"))
-                                }
-                            },
-                            onFailure = { error ->
-                                Log.e(TAG, "从网络获取初始游戏数据失败：${error.message}")
-                                // 网络失败，继续尝试加载保底数据
-                            }
-                        )
-                    } catch (e: Exception) {
-                        Log.e(TAG, "网络获取游戏数据时出现异常", e)
-                        // 出现异常，继续尝试加载保底数据
-                    }
-                } else {
-                    Log.d(TAG, "网络不可用，将尝试加载保底数据")
+                if (networkResult.isNotEmpty()){
+                    // 先清除现有数据，再保存新数据
+                    clearGameConfigData()
+                    val savedItems =  saveGameConfigToDatabase(networkResult)
+                    Log.d(TAG, "从网络成功获取并保存了 ${savedItems.size} 条游戏数据")
+                    updateConfigCache()
+                }else{
+                    loadFallbackDataToDatabase() // 如果网络获取失败，尝试加载保底数据
                 }
-                
-                // 2. 如果网络获取失败，尝试加载保底数据
-                if (!dataLoaded) {
-                    loadFallbackDataToDatabase()
-                    
-                    // 更新缓存状态，使用加载的保底数据
-                    cacheLock.withLock {
-                        _gameConfigCache = database.gameConfigDao().getAll()
-                        lastCacheTime = System.currentTimeMillis()
-                    }
-                }
-                
-                // 3. 初始化完成后，检查是否有数据加载成功
-                val gameCount = database.gameConfigDao().getCount()
-                if (gameCount == 0) {
+
+                // 初始化完成后，检查是否有数据加载成功
+                val gameCount = getGameCount() > 0
+                if (!gameCount) {
                     Log.w(TAG, "初始化后数据库仍为空，没有可用的游戏数据")
                     eventManager.emitDataEvent(DataEvent.Error("无法加载游戏数据：请检查网络连接并重试"))
                 }
-            } else {
+            }
+            else {
                 Log.d(TAG, "数据库已有数据，跳过数据加载")
-                
+
                 // 更新缓存，使用数据库中的数据
-                cacheLock.withLock {
-                    if (_gameConfigCache == null) {
-                        _gameConfigCache = database.gameConfigDao().getAll()
-                        lastCacheTime = System.currentTimeMillis()
-                    }
-                }
+                updateConfigCache()
             }
 
             // 使用 EventManager 发送事件
@@ -253,8 +177,9 @@ class DataManager @Inject constructor(
      * @param isInitialLoad 是否为初始加载
      */
     suspend fun refreshAllData(isInitialLoad: Boolean = false) {
-        if (!netManager.isNetworkAvailable) {
-            eventManager.emitDataEvent(DataEvent.Error("网络不可用，无法刷新数据"))
+        if (!netManager.checkNetworkNow()) {
+            eventManager.emitDataEvent(DataEvent.DataLoaded)
+            eventManager.emitSystemEvent(SystemEvent.Info("没有数据可以刷新"))
             if (isInitialLoad) {
                 tryLoadFallbackData()
             }
@@ -267,110 +192,31 @@ class DataManager @Inject constructor(
             // 发送刷新开始事件
             eventManager.emitDataEvent(DataEvent.RefreshStarted)
 
-            // 清空数据库中的游戏配置记录
-            database.gameConfigDao().deleteAll()
-            
-            // 清空内存缓存
-            invalidateCache()
+            // 清除数据
+            clearGameConfigData()
             
             Log.d(TAG, "已清空现有数据，准备获取最新数据")
 
-            // 添加超时处理的网络请求
-            val networkResult = withTimeoutOrNull(NETWORK_TIMEOUT) {
-                netManager.getGameList()
+            // 使用提取的方法获取并保存数据
+            val networkResult =  fetchGameConfigFromNetwork()
+            val savedItems=  saveGameConfigToDatabase(networkResult)
+            if (savedItems.isNotEmpty()) {
+                // 更新缓存
+                updateConfigCache()
+                eventManager.emitDataEvent(DataEvent.RefreshCompleted)
+            }else{
+                Log.e(TAG, "没有数据可以刷新")
+                eventManager.emitSystemEvent(SystemEvent.Info("没有数据可以刷新"))
             }
 
-            if (networkResult == null) {
-                // 网络请求超时
-                Log.e(TAG, "网络请求超时，无法获取最新数据")
-                eventManager.emitDataEvent(DataEvent.Error("网络请求超时，无法获取最新数据"))
-                
-                // 如果是初次加载，尝试加载保底数据
-                if (isInitialLoad) {
-                    tryLoadFallbackData()
-                } else {
-                    // 尝试从数据库恢复数据
-                    val databaseItems = database.gameConfigDao().getAll()
-                    if (databaseItems.isNotEmpty()) {
-                        cacheLock.withLock {
-                            _gameConfigCache = databaseItems
-                            lastCacheTime = System.currentTimeMillis()
-                        }
-                        Log.d(TAG, "已从数据库恢复 ${databaseItems.size} 条数据")
-                    } else {
-                        tryLoadFallbackData()
-                    }
-                }
-                return
-            }
 
-            // 处理网络请求结果
-            networkResult.fold(
-                onSuccess = { configItems ->
-                    try {
-                        // 处理可能的空值，避免空指针异常
-                        val validConfigItems = configItems.map { item ->
-                            item.copy(
-                                gameId = item.gameId,
-                                name = item.name,
-                                icon = item.icon,
-                                gameRes = item.gameRes,
-                                download = item.download
-                            )
-                        }
-                        
-                        if (validConfigItems.isEmpty()) {
-                            Log.w(TAG, "网络返回数据为空")
-                            eventManager.emitDataEvent(DataEvent.Error("网络返回数据为空"))
-                            
-                            if (isInitialLoad) {
-                                tryLoadFallbackData()
-                            }
-                            return@fold
-                        }
-                        
-                        // 直接保存到数据库
-                        database.gameConfigDao().insertAll(validConfigItems)
-                        
-                        // 更新缓存
-                        cacheLock.withLock {
-                            _gameConfigCache = validConfigItems
-                            lastCacheTime = System.currentTimeMillis()
-                        }
-                        
-                        Log.d(TAG, "刷新数据成功，更新了 ${validConfigItems.size} 条记录")
-                        eventManager.emitDataEvent(DataEvent.RefreshCompleted)
-                    } catch (e: Exception) {
-                        Log.e(TAG, "保存刷新数据失败", e)
-                        eventManager.emitDataEvent(DataEvent.Error("保存数据失败: ${e.message}"))
-                        
-                        if (isInitialLoad) {
-                            tryLoadFallbackData()
-                        }
-                    }
-                },
-                onFailure = { error ->
-                    Log.e(TAG, "刷新数据失败", error)
-                    eventManager.emitDataEvent(DataEvent.Error("刷新数据失败: ${error.message}"))
-                    
-                    if (isInitialLoad) {
-                        tryLoadFallbackData() 
-                    } else {
-                        // 尝试恢复缓存
-                        getGameConfigItems(false)
-                    }
-                }
-            )
+
+
         } catch (e: Exception) {
             Log.e(TAG, "刷新数据失败", e)
             eventManager.emitDataEvent(DataEvent.Error("刷新数据失败: ${e.message}"))
             
-            if (isInitialLoad) {
-                tryLoadFallbackData()
-            } else {
-                // 尝试恢复缓存
-                getGameConfigItems(false)
-            }
+
         }
     }
 
@@ -429,23 +275,24 @@ class DataManager @Inject constructor(
                     
                     // 1. 首先尝试从数据库加载
                     val dbItems = database.gameConfigDao().getAll()
-                    
+
                     // 如果数据库有数据且不强制刷新，则使用数据库数据
                     if (dbItems.isNotEmpty() && !forceRefresh) {
                         Log.d(TAG, "从数据库加载游戏配置数据成功: ${dbItems.size} 个游戏")
+
                         _gameConfigCache = dbItems
                         lastCacheTime = System.currentTimeMillis()
                         return _gameConfigCache?.toList() ?: emptyList()
+
                     }
-                    
+
                     // 2. 数据库为空或需强制刷新，尝试从网络获取
                     if (netManager.isNetworkAvailable) {
                         Log.d(TAG, "尝试从网络获取游戏配置数据")
                         try {
-                            // 添加超时处理
-                            val networkResult = withTimeoutOrNull(NETWORK_TIMEOUT) {
-                                fetchGameConfigFromNetwork()
-                            }
+
+                            val   networkResult =  fetchGameConfigFromNetwork()
+
                             
                             if (networkResult != null && networkResult.isNotEmpty()) {
                                 Log.d(TAG, "从网络获取游戏配置数据成功: ${networkResult.size} 个游戏")
@@ -526,72 +373,90 @@ class DataManager @Inject constructor(
 
     /**
      * 从网络获取游戏配置数据
-     * 获取并解析远程配置，然后保存到数据库
+     * 只负责数据获取，不进行数据库操作
+     * @return 网络获取的游戏配置数据
      */
     private suspend fun fetchGameConfigFromNetwork(): List<GameConfigItem> = withContext(Dispatchers.IO) {
         try {
-            // 使用NetworkManager获取游戏列表
             Log.d(TAG, "开始从网络获取游戏配置数据")
-            
+
             val result = netManager.getGameList()
             result.fold(
                 onSuccess = { configItems ->
-                    // 验证数据有效性
                     if (configItems.isEmpty()) {
                         Log.e(TAG, "网络返回数据为空")
-                        return@withContext emptyList<GameConfigItem>()
+                        emptyList()
+                    } else {
+                        configItems
                     }
-                    
-                    // 处理可能的空值
-                    val validConfigItems = configItems.map { item ->
-                        item.copy(
-                            gameId = item.gameId,
-                            name = item.name,
-                            icon = item.icon,
-                            gameRes = item.gameRes,
-                            download = item.download
-                        )
-                    }
-                    
-                    // 直接保存到数据库
-                    database.gameConfigDao().insertAll(validConfigItems)
-                    Log.d(TAG, "网络数据已保存到数据库: ${validConfigItems.size} 个游戏")
-                    
-                    // 从数据库重新获取，确保获取最新的完整数据
-                    val refreshedItems = database.gameConfigDao().getAll()
-                    return@withContext refreshedItems
                 },
                 onFailure = { error ->
                     Log.e(TAG, "从网络获取游戏配置数据失败: ${error.message}")
-                    throw error
+//                    throw error
+                    emptyList()
                 }
+
             )
         } catch (e: Exception) {
             Log.e(TAG, "从网络获取游戏配置数据异常", e)
+            emptyList()
+//            throw e
+        }
+    }
+
+    /**
+     * 保存游戏配置数据到数据库
+     * @param configItems 游戏配置数据
+     * @return 处理并保存后的数据
+     */
+    private suspend fun saveGameConfigToDatabase(configItems: List<GameConfigItem>): List<GameConfigItem> {
+        if (configItems.isEmpty()) {
+            Log.e(TAG, "保存失败：数据为空")
+            return emptyList()
+        }
+
+        // 处理数据转换，确保字段匹配和非空约束
+        val processedItems = configItems.map { item ->
+            // 创建GameConfigItem对象，确保字段映射正确
+            GameConfigItem(
+                id = item.id,
+                // 确保驼峰命名字段映射正确
+                gameId = item.gameId,  // JSON中的gameid映射到gameId
+                pubId = item.pubId,          // JSON中的pubid映射到pubId
+                ret = item.ret,
+                name = item.name,
+                icon = item.icon,
+                rating = item.rating,
+                gameRes = item.gameRes,
+                info = item.info,            // 允许为null
+                diff = item.diff,
+                download = item.download,
+                downicon = item.downicon,    // 允许为null
+                patch = item.patch,
+                timestamp = item.timestamp,  // 允许为null
+                size = item.size,            // 允许为null
+
+                // 关键部分：确保集合字段不为null
+                categories = item.categories,
+                tags = item.tags,
+
+                // 其他字段使用默认值
+                isLocal = false,
+                localPath = ""
+            )
+        }
+
+        try {
+            // 保存到数据库
+            database.gameConfigDao().insertAll(processedItems)
+            Log.d(TAG, "成功保存 ${processedItems.size} 条游戏配置数据到数据库")
+            return processedItems
+        } catch (e: Exception) {
+            Log.e(TAG, "保存游戏配置数据失败", e)
             throw e
         }
     }
 
-
-    /**
-     * 检查缓存是否过期
-     */
-    private fun isCacheExpired(): Boolean {
-        return System.currentTimeMillis() - lastCacheTime > CACHE_VALID_TIME
-    }
-
-    /**
-     * 使缓存失效
-     */
-    private fun invalidateCache() {
-        CoroutineScope(Dispatchers.IO).launch {
-            cacheLock.withLock {
-                _gameConfigCache = null
-                lastCacheTime = 0
-                Log.d(TAG, "游戏配置数据缓存已清除")
-            }
-        }
-    }
 
     /**
      * 从缓存获取游戏数据
@@ -663,8 +528,53 @@ class DataManager @Inject constructor(
      * 获取数据库中游戏的数量
      * 用于检查数据是否存在
      */
-    suspend fun getGameCount(): Int = withContext(Dispatchers.IO) {
+    private suspend fun getGameCount(): Int = withContext(Dispatchers.IO) {
         database.gameConfigDao().getCount()
+    }
+
+
+    suspend fun clearGameConfigData() = withContext(Dispatchers.IO) {
+        try {
+            // 清空数据库中的游戏配置记录
+            database.gameConfigDao().deleteAll()
+
+            // 清空内存缓存
+            invalidateCache()
+        } catch (e: Exception) {
+            Log.e(TAG, "清除游戏配置数据失败", e)
+            throw e
+        }
+    }
+
+    /**
+     * 检查缓存是否过期
+     */
+    private fun isCacheExpired(): Boolean {
+        return System.currentTimeMillis() - lastCacheTime > CACHE_VALID_TIME
+    }
+
+    /**
+     * 使缓存失效
+     */
+    private fun invalidateCache() {
+        CoroutineScope(Dispatchers.IO).launch {
+            cacheLock.withLock {
+                _gameConfigCache = null
+                lastCacheTime = 0
+                Log.d(TAG, "游戏配置数据缓存已清除")
+            }
+        }
+    }
+
+    /**
+     * 强制更新缓冲
+     */
+    suspend private fun updateConfigCache(){
+        cacheLock.withLock {
+            _gameConfigCache = database.gameConfigDao().getAll()
+            lastCacheTime = System.currentTimeMillis()
+        }
+        Log.d(TAG, "游戏配置数据缓存已更新")
     }
 
     /**
@@ -685,5 +595,7 @@ class DataManager @Inject constructor(
             throw e
         }
     }
+
+
 
 }

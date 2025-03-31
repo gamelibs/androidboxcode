@@ -76,9 +76,35 @@ sealed class Custom{
         var localPath: String
     )
 
+    /**
+     * 热门游戏数据
+     */
+    data class MyGameData(
+        val id: String,
+        val gameId: String?,
+        val name: String,
+        val iconUrl: String,
+        val gameRes: String,
+        val rating: Int = 0,
+        val patch: Int = 1,
+        var description: String,
+        var downloadUrl: String,
+        var isLocal: Boolean,
+        var localPath: String,
+        var size: String? = "1M",
+        var hasUpdate:Boolean,
+        var installTime:String,
+        var lastPlayTime:String,
+        var playCount:Int= 0
+    )
+
     companion object {
         fun ToBaseData(id: String,name: String,iconUrl: String): baseGameData {
             return baseGameData(id, name, iconUrl)
+        }
+
+        fun ToHotData(id: String): HotGameData {
+            return HotGameData(id,"","","","",0,1,"","",false,"")
         }
     }
     /**

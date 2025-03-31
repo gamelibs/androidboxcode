@@ -1,12 +1,16 @@
 package com.example.gameboxone.ui.screen
 
 import android.annotation.SuppressLint
+import android.graphics.Bitmap
 import android.os.Build
 import android.util.Log
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
+import android.webkit.PermissionRequest
 import android.webkit.WebChromeClient
+import android.webkit.WebResourceError
+import android.webkit.WebResourceRequest
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.webkit.WebSettings
@@ -28,6 +32,7 @@ import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.data.viewmodel.GamePlayerViewModel
 import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.utils.WebGLHelper
+import com.example.gameboxone.utils.WebSettingsUtils
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -79,83 +84,46 @@ fun GamePlayerScreen(
     // 创建WebView
     val webViewWithSettings = remember {
         WebView(context).apply {
-            // 单次设置硬件加速
+            // 使用统一的WebSettings工具类配置
+            WebSettingsUtils.setSettings(context, this)
+
+            // 硬件加速
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
-
-            settings.apply {
-                // 基础设置
-                javaScriptEnabled = true
-                domStorageEnabled = true
-                databaseEnabled = true
-
-                // WebGL必要设置
-                allowFileAccess = true
-                allowContentAccess = true
-
-
-                // 缓存设置
-                cacheMode = WebSettings.LOAD_NO_CACHE
-
-                // 安全设置
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    safeBrowsingEnabled = false
-                }
-            }
 
             // 添加JavaScript接口
             addJavascriptInterface(JsBridge(eventManager), "AndroidBridge")
 
-            // WebGL错误处理
+            // 增强的WebChromeClient
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(message: ConsoleMessage): Boolean {
-                    // 特别过滤WebGL GL_INVALID_ENUM错误
-                    if (message.message().contains("GL_INVALID_ENUM") && 
-                        message.message().contains("GetIntegerv")) {
-                        // 忽略此类错误，因为它们通常无害
-                        Log.d(TAG, "忽略WebGL GetIntegerv错误")
-                        return true
-                    }
-                    
-                    // 记录其他WebGL相关消息
-                    if (message.message().contains("WebGL")) {
-                        Log.d(TAG, "WebGL: ${message.message()}")
-                    }
-                    
-                    return super.onConsoleMessage(message)
+                    Log.d(TAG, "WebGL控制台: ${message.message()}")
+                    return true
+                }
+
+                // 处理权限请求 - 对WebGL很重要
+                @SuppressLint("NewApi")
+                override fun onPermissionRequest(request: PermissionRequest) {
+                    request.grant(request.resources)
                 }
             }
 
-            // 注入WebGL错误处理修复脚本
-            evaluateJavascript("""
-                (function() {
-                    // 修复WebGL getParameter GL_INVALID_ENUM错误
-                    const originalGetContext = HTMLCanvasElement.prototype.getContext;
-                    HTMLCanvasElement.prototype.getContext = function(type, attrs) {
-                        if (type.includes('webgl')) {
-                            const gl = originalGetContext.call(this, type, attrs);
-                            
-                            if (gl) {
-                                // 替换原始getParameter方法，捕获并处理错误
-                                const originalGetParameter = gl.getParameter;
-                                gl.getParameter = function(pname) {
-                                    try {
-                                        return originalGetParameter.call(this, pname);
-                                    } catch(e) {
-                                        // 静默处理GetIntegerv错误
-                                        console.log("WebGL参数获取失败，忽略: " + pname);
-                                        return null;
-                                    }
-                                };
-                            }
-                            return gl;
-                        }
-                        return originalGetContext.call(this, type, attrs);
-                    };
-                    
-                    console.log("WebGL错误处理修复已应用");
-                })();
-            """, null)
+            // 添加WebViewClient以监控加载状态
+            webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+                    Log.d(TAG, "开始加载页面: $url")
+                    super.onPageStarted(view, url, favicon)
+                }
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    Log.d(TAG, "页面加载完成: $url")
+                    super.onPageFinished(view, url)
+                }
+
+                override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                    Log.e(TAG, "加载错误: ${error.description} 代码: ${error.errorCode}")
+                    super.onReceivedError(view, request, error)
+                }
+            }
         }
     }
 
@@ -185,10 +153,43 @@ fun GamePlayerScreen(
             when (event) {
                 is GameEvent.UI.BridgeDialogResult -> {
                     webViewWithSettings.post {
-                        webViewWithSettings.evaluateJavascript(
-                            "javascript:${event.callback}(${event.confirmed})",
-                            null
-                        )
+                        webViewWithSettings.evaluateJavascript("""
+                            (function() {
+                                // 修复WebGL初始化问题
+                                const originalGetContext = HTMLCanvasElement.prototype.getContext;
+                                HTMLCanvasElement.prototype.getContext = function(contextType, contextAttributes) {
+                                    // 强制启用所有WebGL特性
+                                    if (contextType.includes('webgl')) {
+                                        const newAttributes = contextAttributes || {};
+                                        newAttributes.alpha = true;
+                                        newAttributes.antialias = true;
+                                        newAttributes.depth = true;
+                                        newAttributes.premultipliedAlpha = true;
+                                        newAttributes.preserveDrawingBuffer = true;
+                                        
+                                        // 尝试创建上下文
+                                        const gl = originalGetContext.call(this, contextType, newAttributes);
+                                        
+                                        if (gl) {
+                                            // 保护getParameter方法
+                                            const originalGetParameter = gl.getParameter;
+                                            gl.getParameter = function(pname) {
+                                                try {
+                                                    return originalGetParameter.call(this, pname);
+                                                } catch(e) {
+                                                    console.log("WebGL参数获取被捕获: " + pname);
+                                                    return null;
+                                                }
+                                            };
+                                        }
+                                        return gl;
+                                    }
+                                    return originalGetContext.call(this, contextType, contextAttributes);
+                                };
+                                
+                                console.log("WebGL环境已优化");
+                            })();
+                        """, null)
                     }
                 }
                 else -> {}

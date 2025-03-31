@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no"> -->
+    <title>Shop Panel</title>
+    <style>
+        @font-face {
+            font-family: 'Supercell'; /* Font ismi */
+            src: url('./fonts/supercell-magic.ttf') format('opentype'); /* Fontun yolu ve formatı */
+        }
+
+        html, body {
+            font-family: 'Supercell', sans-serif; /* Yüklenen fontu kullan */
+        }
+
+        button {
+            font-family: 'Supercell', sans-serif; /* Yüklenen fontu kullan */
+        }
+
+        .background-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(15, 21, 66, 0.89); /* Mor renk, yarı opak */
+            z-index: 10000; /* Shop panelin arkasında tıklanmasını sağlamak için yüksek z-index */
+        }
+
+        .title-container {
+            /*width: 100%;*/
+            /*text-align: center;*/
+            /*margin-bottom: 8%; !* Alttan biraz boşluk *!*/
+            /*transform: translateY(-1vw);*/
+            /*height: 10%; !* Adjust button size *!*/
+            pointer-events: none;
+            margin-bottom: 8%;
+            transform: translateY(-1vw);
+        }
+
+        .store-title {
+            pointer-events: none;
+            font-family: 'Supercell', sans-serif;
+            font-size: 30px; /* Başlığın boyutu */
+            color: #ffffff;
+            text-shadow: 5px 5px 10px #000000; /* Gölgeli stil */
+        }
+
+        .shop-container {
+            position: fixed; /* Panelin her zaman ekranın ortasında kalmasını sağlar */
+            top: 20vh; /* Dikeyde ortala */
+            left: 37vw; /* Yatayda ortala */
+            z-index: 10001; /* Üstte görünmesini sağlamak için yüksek bir z-index */
+            transform: translate(-50%, -50%) scale(1); /* Yatay ve dikeyde kesin ortalamak için */
+            animation: popUpGrow 0.5s ease forwards, shakeEffect 0.4s ease 0.5s; /* Animasyon */
+        }
+
+        .shop-panel {
+            width: 25vw; /* Panel genişliği */
+            height: 28vw; /* Panel yüksekliği */
+            min-width: 310px; /* Minimum genişlik */
+            min-height: 440px; /* Minimum yükseklik */
+            border-radius: 25px; /* Köşeleri yuvarlat */
+            padding: 2vw; /* İçerik için dolgu */
+            text-align: center; /* İçeriği ortala */
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.5); /* Gölge efekti */
+            background-image: url('./img/shopPopup/bigPopup.png'); /* Arka plan görseli */
+            background-repeat: no-repeat; /* Görsel tekrarını engelle */
+            background-size: cover; /* Görseli tam olarak yerleştir */
+            overflow: hidden; /* İçeriğin taşmasını engelle */
+        }
+
+        .exit-btn {
+            position: absolute;
+            top: 1%; /* Adjust according to the space you want from the top */
+            right: 3%; /* Adjust according to the space you want from the right */
+            width: 40px; /* Adjust button size */
+            height: 40px; /* Adjust button size */
+            background-image: url('./img/shopPopup/exit.png'); /* Path to your exit image */
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-color: transparent;
+            background-position: center;
+            border: none;
+            cursor: pointer;
+            z-index: 10002;
+        }
+
+        .tab-menu {
+            margin-bottom: 5%;
+            display: flex;
+            justify-content: center; /* or 'space-between' for more even spacing */
+            gap: 15%; /* Tablar arasındaki boşluk için bu değeri azalt */
+        }
+
+        .tab-btn {
+            /*text-shadow: 3px 3px 6px #000000; !* Gölgeli stil *!*/
+            width: 10vw; /* Her iki butona da sabit genişlik ver */
+            min-width: 120px;
+            max-width: 120px;
+            /*height: auto;*/
+            transform: scale(1.2);
+            padding: 4% 0;
+            border: none;
+            background-color: rgba(59, 94, 183, 0);
+            color: white;
+            cursor: pointer;
+            font-size: min(15px, 15px);
+            transition: background-color 0.3s;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+
+            /*overflow: hidden;*/
+
+        }
+
+        ::-webkit-scrollbar {
+            width: 12px; /* scrollbar genişliği */
+        }
+
+        /* Scrollbar arka planı */
+        ::-webkit-scrollbar-track {
+            background: #b1b1cb; /* track arka plan rengi */
+            border-radius: 10px;
+        }
+
+        /* Scrollbar kaydırma kısmı (thumb) */
+        ::-webkit-scrollbar-thumb {
+            background-color: #585db9; /* kaydırma rengini ayarla */
+            border-radius: 10px;
+            border: 2px solid #f1f1f1; /* thumb kenarlığı */
+        }
+
+        /* Hover durumunda thumb */
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: #555; /* hover rengini ayarla */
+        }
+
+        .range-content, .melee-content {
+            
+            width: 25vw;
+            height: 25vw;
+            min-width: 300px; /* Minimum genişlik */
+            min-height: 290px; /* Minimum genişlik */
+            max-height: 290px; /* Minimum genişlik */
+            max-width: 350px;
+            overflow-y: auto; /* Enable vertical scrolling */
+            overflow-x: hidden; /* Yatay kaydırmayı devre dışı bırak */
+            /*scrollbar-width: none; !* Firefox *!*/
+        }
+
+        .range-grid, .melee-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            row-gap: 5vw;
+            scroll-snap-type: y mandatory;
+
+            -webkit-overflow-scrolling: touch; /* Mobil cihazlarda momentum kaydırmayı etkinleştirir */
+            scroll-behavior: smooth; /* Daha akıcı kaydırma */
+        }
+
+        .tab-item {
+            display: flex;
+            /*flex-direction: column;*/
+            align-items: center;
+            justify-content: space-between; /* Çocuk elemanları daha iyi hizalamak için */
+            position: relative;
+            width: auto; /* Kart genişliğini arttır */
+            height: 20vh; /* Kart yüksekliğini arttır */
+
+            min-width: 140px; /* Minimum genişlik */
+            min-height: 170px; /* Minimum yükseklik */
+        }
+
+        .lock-card {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 110%;
+            height: 100%;
+
+            background-image: url('./img/shopPopup/lock-card.png'); /* Yeni kart arka planı */
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            border-radius: 10%; /* Köşeleri yuvarlat */
+            z-index: 2; /* Arka planın karakterlerin arkasında kalması için daha düşük z-index */
+        }
+
+        .range-img, .melee-img {
+            position: absolute;
+            top: 47%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 55%; /* İkonun boyutunu ayarlayın */
+            min-width: 10px;
+            max-width: 100px;
+            
+            height: 55%;
+            max-height: 100px;
+            min-height: 10px;
+
+            z-index: 2;
+            
+        }
+
+        .buy-btn {
+            position: absolute; /* Sabit bir konumda tutmak için */
+            top: 102%; /* Kartın alt kısmına sabitler */
+            /*left: 25%; !* Yatayda ortalar *!*/
+            transform: translateX(35%); /* Ortalamayı kesinleştirir */
+            width: 60%; /* Buton genişliği */
+            min-width: 105px; /* Minimum genişlik */
+            min-height: 32px; /* Minimum genişlik */
+            height: 30px; /* Buton yüksekliği */
+            font-size: min(13px, 13px);
+            color: #8f3f1d;
+            font-family: 'Supercell', sans-serif;
+            background-image: url('./img/shopPopup/orangeButton.png'); /* Görsel arka plan */
+            background-size: cover; /* Görsel boyutunu butonla eşleştir */
+            background-repeat: no-repeat; /* Görselin tekrarlanmasını engeller */
+            background-position: center; /* Görselin ortalanmasını sağlar */
+            border: none; /* Kenarlık olmaması için */
+            border-radius: 5px; /* Hafif yuvarlatılmış kenarlar */
+            cursor: pointer; /* İmleç değişimi */
+            z-index: 3; /* Üstte görünmesi için */
+            text-align: center; /* Yazıyı ortalar */
+            display: flex; /* Butonu içeriğiyle hizalar */
+            align-items: center; /* Dikeyde ortalar */
+            justify-content: center; /* Yatayda ortalar */
+        }
+
+        .buy-btn:hover {
+            filter: brightness(1.1); /* Hover sırasında butonu biraz parlak yapar */
+        }
+        
+        .ads-icon {
+            margin-right: 0.5vh; /* Space between the icon and the text */
+            width: 0.8vw; /* Adjust icon size to fit nicely inside the button */
+            height: auto;
+        }
+
+        #rangeTab.active {
+            background-image: url('./img/shopPopup/selected_tab.png');
+            color: #ffffff; /* Beyaz renk (aktif olan tab) */
+            text-shadow: 3px 3px 6px #000000; /* Gölgeli stil */
+        }
+
+        #meleeTab.active {
+            background-image: url('./img/shopPopup/selected_tab.png');
+            color: #ffffff; /* Beyaz renk (aktif olan tab) */
+            text-shadow: 3px 3px 6px #000000; /* Gölgeli stil */
+        }
+
+        #rangeTab {
+            background-image: url('./img/shopPopup/disabled_tab.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: #8085e0; /* Beyaz renk (aktif olan tab) */
+        }
+
+        #meleeTab {
+            background-image: url('./img/shopPopup/disabled_tab.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+            color: #8085e0; /* Beyaz renk (aktif olan tab) */
+        }
+
+        .tab-btn.active {
+            background-image: url('./img/shopPopup/selected_tab.png');
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+
+        .item-name {
+            position: absolute;
+            /*top: 1vh; !* Adjust this value if needed *!*/
+            top: 8%;
+            transform: translateY(-7%);
+            
+            left: 55%;
+            transform: translateX(-50%);
+            font-size: clamp(0.5rem, 0.8vw, 1.2rem);
+            color: #4e5078;
+            font-family: 'Supercell', sans-serif;
+            /*text-shadow: 1px 1px 2px #000000; !* Add shadow for better visibility *!*/
+            z-index: 1000;
+        }
+
+        .lock-icon {
+            position: absolute;
+            top: 50%;
+            left: 55%;
+            transform: translate(-50%, -50%);
+            width: 15%; /* İkonun boyutunu ayarlayın */
+            height: auto;
+            z-index: 2005;
+        }
+
+        .stats-bar {
+            box-shadow: inset 0px 4px 8px rgba(0, 0, 0, 0.3); /* Inner shadow */
+            position: absolute; /* Barın arka planda kalması için */
+            top: -30%; /* Konum ayarı, gerektiğinde ince ayar yapılabilir */
+            /*left: 0%;*/
+            width: 95%; /* Bar genişliği, isteğe göre ayarlanabilir */
+            min-width: 110px;
+            max-width: 110px;
+            height: 30px; /* Bar yüksekliği */
+            background-color: #767aae; /* Varsayılan gri renk (lock-stick) */
+            border-radius: 50px; /* Hafif yuvarlatılmış köşeler (isteğe bağlı) */
+            z-index: -1; /* Arkada kalması için */
+            /*border-radius: 20px;*/
+            /*border-radius: 0px; !* Görsel yuvarlatma *!*/
+        }
+
+        .stats-bar.open {
+            background-color: #232784; /* Mor renk */
+        }
+
+        /*.stats-bar {*/
+        /*    position: absolute; !* Barın arka planda kalması için *!*/
+        /*    top: -40%; !* Konum ayarı, gerektiğinde ince ayar yapılabilir *!*/
+        /*    left: -13%;*/
+        /*    width: 115%; !* Bar genişliği, isteğe göre ayarlanabilir *!*/
+        /*    height: 30px; !* Bar yüksekliği *!*/
+        /*    background-image: url('./img/shopPopup/lock-stick.png'); !* Bar görseli *!*/
+        /*    background-size: cover;*/
+        /*    background-repeat: no-repeat;*/
+        /*    z-index: -1; !* Arkada kalması için *!*/
+        /*    border-radius: 20px; !* Görsel yuvarlatma *!*/
+        /*}*/
+
+        /*.stats-container {*/
+        /*    position: relative;*/
+        /*    margin-top: auto; !* Kartın altına yerleştirmek için *!*/
+        /*    display: flex;*/
+        /*    justify-content: space-between;*/
+        /*    z-index: 2;*/
+        /*    !*transform: translateX(-23px); !* Hepsini biraz sola kaydır *!*!*/
+        /*    left: 25%;*/
+        /*    top: -10.5%;*/
+        
+        /*    width: 60px; !* Genişlik kart boyutuna göre ayarlanır *!*/
+        /*    height: 17px; !* Stats yüksekliği sabit *!*/
+        
+        /*    align-items: center; !* Dikeyde ortala *!*/
+        /*    gap: 10px; !* Sağ ve sol ikonlar arasındaki boşluk *!*/
+        /*    white-space: nowrap; !* Metnin satır kaydırmasını engelle *!*/
+        /*    !*overflow: hidden;*!*/
+        /*}*/
+
+        .stats-container {
+            position: relative; /* Sabit bir konumda tutmak için */
+            margin: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 2;
+            left: 54.85%;
+            top: 40%;
+            transform: translate(-50%, -50%);
+            width: 72.8%; /* Stats bar genişliği kart genişliğine göre esnek */
+            min-width: 125px;
+            height: 20px; /* Sabit bir yükseklik */
+            gap: 45px; /* Sağ ve sol ikonlar arasındaki boşluğu azalt */
+            white-space: nowrap;
+            /*overflow: hidden;*/
+            /*border-radius: 50vh; !* Kenarları oval yapar *!*/
+            pointer-events: none; /* İsteğe bağlı: Tıklanamaz hale getirir */
+        }
+
+        .stats-container .health {
+            margin-right: -15px; /* Health ve Power metinlerini birbirine yaklaştır */
+        }
+
+        .stats-container .power {
+            margin-left: -15px; /* İsteğe bağlı: Daha fazla yaklaştır */
+        }
+
+        .stats-container .health,
+        .stats-container .power {
+            display: flex;
+            gap: 1px; /* İkon ve metin arası boşluk */
+            align-items: center;
+            justify-content: center;
+            white-space: nowrap; /* Satır kaymasını engelle */
+            font-size: inherit; /* Parent font-size ile aynı boyutta tut */
+        }
+
+        .stats-container .health span,
+        .stats-container .power span {
+            font-size: 0.8rem; /* Metin boyutunu büyütmek için bu değeri artırın */
+            font-weight: bold; /* Daha belirgin hale getirmek için kalın yazı tipi */
+            color: #ffffff; /* Metin rengi (isteğe bağlı) */
+        }
+
+        .stat-icon {
+            width: 15px; /* İkon boyutu */
+            height: 15px; /* İkon boyutu */
+        }
+        
+
+        @keyframes popUpGrow {
+            0% {
+                transform: scale(0);
+            }
+            100% {
+                transform: scale(1);
+            }
+        }
+
+        @keyframes shakeEffect {
+            0%, 100% {
+                transform: translateX(0);
+            }
+            25% {
+                transform: translateX(-10px);
+            }
+            50% {
+                transform: translateX(10px);
+            }
+            75% {
+                transform: translateX(-10px);
+            }
+        }
+
+        /*@media only screen and (max-width: 1250px) and (hover: hover){*/
+        /*    .stats-container {*/
+        /*        min-width: 55px;*/
+        /*        max-height: unset;*/
+        /*        height: 4.3vh;*/
+        /*        min-height: unset;*/
+        /*    }*/
+        /*}*/
+        
+        /*@media (pointer: coarse) {*/
+        /*    .stats-container {*/
+        /*        left: 30%;*/
+        /*        bottom: 13.2%;*/
+        /*        width: 35%;*/
+        /*        min-width: 39px;*/
+        /*        font-size: 0.6rem;*/
+        /*    }*/
+        /*}*/
+
+        @media (pointer: coarse) {
+            .range-grid, .melee-grid {
+                grid-template-columns: repeat(2, 1fr);
+                row-gap: 13vw;
+            }
+
+            .item-name {
+                font-size: clamp(1rem, 1vw, 1.2rem);
+                top: 2vh;
+                /*margin-left: -1vw;*/
+            }
+            
+
+            /*.exit-btn {*/
+            /*    top: -47%;*/
+            /*    right: -7%; !* Adjust according to the space you want from the right *!*/
+            /*}*/
+
+            .exit-btn {
+                top: 1%;
+                width: 35px; /* Adjust button size */
+                height: 35px; /* Adjust button size */
+            }
+
+            .range-content, .melee-content {
+                /*width: 41vw; !* Set a fixed height for the content area *!*/
+                /*height: 25vw; !* Set a fixed height for the content area *!*/
+                /*overflow-x: hidden;*/
+
+                /*background: #7d159b;*/
+                min-height: 290px; /* Minimum genişlik */
+            }
+
+            .title-container {
+                transform: translateY(-50%);
+            }
+
+            .lock-card {
+                width: 100%;
+                height: 105%;
+            }
+
+            .store-title {
+                font-size: 25px; /* Başlığın boyutu */
+            }
+
+            .title-container {
+                transform: translateY(0%);
+            }
+            
+            /*.stats-container {*/
+            /*    top: -10.5%;*/
+            /*    left: 31%;*/
+            /*    gap: 45px; !* Sağ ve sol ikonlar arasındaki boşluk *!*/
+            /*}*/
+        }
+
+        @media only screen and (max-width: 767px) and (pointer: coarse) 
+        {
+            
+
+            .item-name {
+                top: 7%;
+            }
+            
+            /*.exit-btn {*/
+            /*    width: 35px; !* Adjust button size *!*/
+            /*    height: 35px; !* Adjust button size *!*/
+            /*    top: -15%;*/
+            /*    right: 0; !* Adjust according to the space you want from the right *!*/
+            /*}*/
+
+            .tab-btn {
+                width: 50vw; /* Her iki butona da sabit genişlik ver */
+                font-size: 3.5vw;
+            }
+
+            .ads-icon {
+                left: 1.2vh; /* Sol tarafta ortalamak için bu değeri ayarlayabilirsiniz */
+                width: 2vw;
+                height: auto;
+            }
+
+            /*.buy-btn {*/
+            /*    right: 15%;*/
+            /*    top: 60%;*/
+            /*}*/
+
+            .range-content, .melee-content {
+                width: 90vw; /* Set a fixed height for the content area */
+                height: 25vw; /* Set a fixed height for the content area */
+                overflow-x: hidden;
+            }
+
+            .tab-item {
+                width: 100%; /* Kart genişliğini arttır */
+                height: 20vh; /* Kart yüksekliğini arttır */
+            }
+
+            .lock-card {
+                width: 110%;
+                height: 100%;
+            }
+            
+            .shop-panel {
+                width: 100vw;  /* İçeriği genişlet */
+                min-width: unset;
+                /*min-width: 100px;*/
+                /*padding: 3vh;*/
+                /*transform: scale(1);*/
+            }
+
+            .shop-container {
+                top: 25%;
+                left: 0%;
+            }
+
+            .buy-btn {
+                width: 60%; /* Buton genişliği */
+                min-width: 112px; /* Minimum genişlik */
+                min-height: 34px; /* Minimum genişlik */
+                height: 30px; /* Buton yüksekliği */
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="background-overlay" id="background-overlay"></div> <!-- Yarı opak mor arka plan -->
+<div class="shop-container" id="shop-container">
+    <div class="shop-panel" id="shop-panel">
+        <button class="exit-btn" id="exitBtn"></button> <!-- Exit butonunu ekledik -->
+        <div class="title-container">
+            <div class="store-title" id="store-title"></div>
+        </div>
+        <div class="tab-menu">
+            <button class="tab-btn active" id="rangeTab" data-key="RANGE">RANGE</button>
+            <button class="tab-btn" id="meleeTab" data-key="MELEE">MELEE</button>
+        </div>
+        <div class="content">
+            <div id="rangeContent" class="range-content">
+                <div class="range-grid" id="rangeGrid"></div>
+            </div>
+            <div id="meleeContent" class="melee-content" style="display:none;">
+                <div class="melee-grid" id="meleeGrid"></div>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+
+    document.getElementById('')
+
+    document.getElementById('rangeTab').addEventListener('click', resetRangeTab)
+    document.getElementById('meleeTab').addEventListener('click', resetMeleeTab)
+
+    // // Scroll pozisyonunu sıfırla
+    // leaderboardContainer.scrollTop = 0;
+
+
+    // document.getElementById('rangeTab').addEventListener('click', ()=>{
+    //     document.getElementById('rangeGrid').scrollTo(0, 0);
+    // })
+
+    // document.getElementById('meleeTab').addEventListener('click', ()=>{
+    //     document.getElementById('meleeGrid').scrollTo(0, 0);
+    // })
+
+    // document.querySelectorAll('.tab-btn').forEach(button => {
+    //     button.addEventListener('click', () => {
+    //         // stats-scroll elementinin scroll pozisyonunu sıfırla
+    //         const statsScroll = document.querySelector('.range-grid');
+    //         if (statsScroll) {
+    //             statsScroll.scrollTo(0, 0);
+    //         }
+    //     });
+    // });
+
+
+    activateRangeScroll()
+    activateMeleeScroll()
+
+    let lastMeleeMergeLevel = 1, lastRangeMergeLevel = 1
+    let openCardList = []; // Açmak istediğiniz karakterlerin isimlerini buraya ekleyin
+
+    const items = {
+        range: [
+            { id: 'archer_1', name: 'Archer', imgSrc: './img/ranges/archer_1.png', price: 'FREE /4', health: '8', power: '4' },
+            { id: 'archer_2', name: 'Archer', imgSrc: './img/ranges/archer_2.png', price: 'FREE 1/4', health: '19', power: '10' },
+            { id: 'yoda_1', name: 'Sage', imgSrc: './img/ranges/yoda_1.png', price: 'FREE 1/4', health: '45', power: '23' },
+            { id: 'yoda_2', name: 'Sage', imgSrc: './img/ranges/yoda_2.png', price: 'FREE 1/4' , health: '108', power: '54' },
+            { id: 'joker_1', name: 'Trickster', imgSrc: './img/ranges/joker_1.png', price: 'FREE 1/4', health: '256', power: '128' },
+            { id: 'joker_2', name: 'Trickster', imgSrc: './img/ranges/joker_2.png', price: 'FREE 1/4', health: '609', power: '304' },
+            { id: 'astronaut_1', name: 'Astronaut', imgSrc: './img/ranges/astronaut_1.png', price: 'FREE 1/4', health: '1.4k', power: '724' },
+            { id: 'astronaut_2', name: 'Astronaut', imgSrc: './img/ranges/astronaut_2.png', price: 'FREE 1/4', health: '3.5k', power: '1.7k' },
+            { id: 'punk_1', name: 'Punk', imgSrc: './img/ranges/punk_1.png', price: 'FREE 1/4', health: '8.2k', power: '4.3k' },
+            { id: 'punk_2', name: 'Punk', imgSrc: './img/ranges/punk_2.png', price: 'FREE 1/4', health: '19k', power: '9.4k' },
+            { id: 'scientist_1', name: 'Scientist', imgSrc: './img/ranges/scientist_1.png', price: 'FREE 1/4', health: '46k', power: '23.6k' },
+            { id: 'scientist_2', name: 'Scientist', imgSrc: './img/ranges/scientist_2.png', price: 'FREE 1/4', health: '114k', power: '58.2k' },
+            { id: 'robot_1', name: 'Robot', imgSrc: './img/ranges/robot_1.png', price: 'FREE 1/4', health: '258k', power: '131k' },
+            { id: 'robot_2', name: 'Robot', imgSrc: './img/ranges/robot_2.png', price: 'FREE 1/4', health: '581k', power: '294k' },
+            { id: 'terminator_1', name: 'Terminator', imgSrc: './img/ranges/terminator_1.png', price: 'FREE 1/4', health: '1.3m', power: '663k' },
+            { id: 'terminator_2', name: 'Terminator', imgSrc: './img/ranges/terminator_2.png', price: 'FREE 1/4', health: '2.9m', power: '1.5m' },
+            { id: 'alien_1', name: 'Alien', imgSrc: './img/ranges/alien_1.png', price: 'FREE 1/4', health: '6.6m', power: '3.3m' },
+            { id: 'alien_2', name: 'Alien', imgSrc: './img/ranges/alien_2.png', price: 'FREE 1/4', health: '15m', power: '7.5m' },
+            { id: 'cyclope_1', name: 'Cyclope', imgSrc: './img/ranges/cyclope_1.png', price: 'FREE 1/4' , health: '33m', power: '17m' },
+            { id: 'cyclope_2', name: 'Cyclope', imgSrc: './img/ranges/cyclope_2.png', price: 'FREE 1/4' , health: '75m', power: '38m' },
+            { id: 'giant_1', name: 'Giant', imgSrc: './img/ranges/giant_1.png', price: 'FREE 1/4' , health: '169m', power: '86m' },
+            { id: 'giant_2', name: 'Giant', imgSrc: './img/ranges/giant_2.png', price: 'FREE 1/4', health: '382m', power: '193m' },
+        ],
+        melee: [
+            { id: 'skeleton_1', name: 'Skeleton', imgSrc: './img/melees/skeleton_1.png', price: 'FREE 1/4', health: '20', power: '3' },
+            { id: 'skeleton_2', name: 'Skeleton', imgSrc: './img/melees/skeleton_2.png', price: 'FREE 1/4', health: '47', power: '7' },
+            { id: 'bedouin_1', name: 'Bedouin', imgSrc: './img/melees/bedouin_1.png', price: 'FREE 1/4', health: '112', power: '17' },
+            { id: 'bedouin_2', name: 'Bedouin', imgSrc: './img/melees/bedouin_2.png', price: 'FREE 1/4', health: '264', power: '40' },
+            { id: 'viking_1', name: 'Viking', imgSrc: './img/melees/viking_1.png', price: 'FREE 1/4' , health: '622', power: '93' },
+            { id: 'viking_2', name: 'Viking', imgSrc: './img/melees/viking_2.png', price: 'FREE 1/4' , health: '1.3k', power: '221' },
+            { id: 'worker_1', name: 'Miner', imgSrc: './img/melees/worker_1.png', price: 'FREE 1/4' , health: '3.4k', power: '521' },
+            { id: 'worker_2', name: 'Miner', imgSrc: './img/melees/worker_2.png', price: 'FREE 1/4' , health: '8.2k', power: '1.2k' },
+            { id: 'ninja_1', name: 'Ninja', imgSrc: './img/melees/ninja_1.png', price: 'FREE 1/4' , health: '19k', power: '2.6k' },
+            { id: 'ninja_2', name: 'Ninja', imgSrc: './img/melees/ninja_2.png', price: 'FREE 1/4' , health: '45k', power: '6.2k' },
+            { id: 'venom_1', name: 'Venom', imgSrc: './img/melees/venom_1.png', price: 'FREE 1/4' , health: '112k', power: '16.2k' },
+            { id: 'venom_2', name: 'Venom', imgSrc: './img/melees/venom_2.png', price: 'FREE 1/4' , health: '274k', power: '36.4k' },
+            { id: 'darthvader_1', name: 'Dark_Lord', imgSrc: './img/melees/darthvader_1.png', price: 'FREE 1/4' , health: '618k', power: '82k' },
+            { id: 'darthvader_2', name: 'Dark_Lord', imgSrc: './img/melees/darthvader_2.png', price: 'FREE 1/4' , health: '1.4m', power: '184k' },
+            { id: 'golem_1', name: 'Golem', imgSrc: './img/melees/golem_1.png', price: 'FREE 1/4' , health: '3.1m', power: '415k' },
+            { id: 'golem_2', name: 'Golem', imgSrc: './img/melees/golem_2.png', price: 'FREE 1/4' , health: '7m', power: '934k' },
+            { id: 'crystal_1', name: 'Crystal', imgSrc: './img/melees/crystal_1.png', price: 'FREE 1/4' , health: '15.8m', power: '2.1m' },
+            { id: 'crystal_2', name: 'Crystal', imgSrc: './img/melees/crystal_2.png', price: 'FREE 1/4' , health: '35.6m', power: '4.7m' },
+            { id: 'king_1', name: 'King', imgSrc: './img/melees/king_1.png', price: 'FREE 1/4' , health: '80m', power: '10.6m' },
+            { id: 'king_2', name: 'King', imgSrc: './img/melees/king_2.png', price: 'FREE 1/4' , health: '180m', power: '23.9m' },
+            { id: 'thanos_1', name: 'Champion', imgSrc: './img/melees/thanos_1.png', price: 'FREE 1/4' , health: '406m', power: '53.9m' },
+            { id: 'thanos_2', name: 'Champion', imgSrc: './img/melees/thanos_2.png', price: 'FREE 1/4' , health: '914m', power: '121m' },
+        ]
+    };
+
+    function createGridContent(items, containerId) {
+        // console.log(window.watchedVideoAmountToUnlockRangeCharacters)
+        // console.log(window.watchedVideoAmountToUnlockMeleeCharacters)
+        // console.log(window.heroButtonsCreatedBefore)
+        // if(window.heroButtonsCreatedBefore)    return
+
+        // window.heroButtonsCreatedBefore = true
+
+        let index = 0
+        const container = document.getElementById(containerId);
+        items.forEach(item => {
+            // console.log('Creating grid content foreach')
+            const isRange = containerId === 'rangeGrid'
+            const isCardOpen = openCardList.includes(item.id); // Açık kartları kontrol et
+
+            if(index > 0) {
+                if(isRange) {
+                    if( window.watchedVideoAmountToUnlockRangeCharacters[index-1] !== window.requiredVideoAmountToUnlockRangeCharacters[index-1]) {
+                        item.price = window.getTranslation('FREE') + ' ' + window.watchedVideoAmountToUnlockRangeCharacters[index-1] + '/' + window.requiredVideoAmountToUnlockRangeCharacters[index-1]
+                    }
+                }
+                else {
+                    if(window.watchedVideoAmountToUnlockMeleeCharacters[index-1] !== window.requiredVideoAmountToUnlockMeleeCharacters[index-1]) {
+                        item.price = window.getTranslation('FREE') + ' ' + window.watchedVideoAmountToUnlockMeleeCharacters[index-1] + '/' + window.requiredVideoAmountToUnlockMeleeCharacters[index-1]
+                    }
+                }
+            }
+            
+            const itemElement = document.createElement('div');
+            itemElement.className = 'tab-item';
+            itemElement.innerHTML = `
+        <div class="item-name">${window.getTranslation(item.name)}</div>
+        <div class="lock-card"></div>
+        <img src="${item.imgSrc}" alt="${item.name}" class="${isRange ? 'range-img' : 'melee-img'}">
+        <img src="./img/shopPopup/lock.png" alt="Lock Icon" class="lock-icon">
+        <div class="stats-container">
+        <div class="stats-bar ${isCardOpen ? 'open' : ''}"></div> <!-- open sınıfı dinamik -->
+            <div class="health">
+                <img src="./img/shopPopup/${isCardOpen ? 'openhealth.png' : 'health.png'}" 
+                     alt="Health Icon" class="stat-icon">
+                <span>${item.health}</span>
+            </div>
+            <div class="power">
+                <img src="./img/shopPopup/${isCardOpen ? 'openpower.png' : 'power.png'}" 
+                     alt="Power Icon" class="stat-icon">
+                <span>${item.power}</span>
+            </div>
+        </div>
+        <button class="buy-btn" id="${item.id}">
+            <img src="./img/shopPopup/adsIcon.png" class="ads-icon"> ${item.price}
+        </button>
+               
+    `;
+
+
+            container.appendChild(itemElement);
+
+            const healthSpan = itemElement.querySelector('.health');
+            const powerSpan = itemElement.querySelector('.power');
+
+            updateFontSize(healthSpan)
+            updateFontSize(powerSpan)
+
+            // const statsbar = itemElement.querySelector('.stats-bar')
+            // const statsContainer = itemElement.querySelector('.stats-container')
+            // if(index < 3) {
+            //     statsContainer.style.gap = '20px'
+            //     statsContainer.style.left = '32%'
+            //     statsbar.style.left = '67%';
+            //     // statsContainer.style.top = '-10%'
+            // }
+
+            // console.log('Merge levels:')
+            // console.log(lastRangeMergeLevel)
+            // console.log(lastMeleeMergeLevel)
+
+            const button = itemElement.querySelector('.buy-btn');
+            const rewardedType = containerId + '_' + index
+
+            if(isRange) {
+                if(window.watchedVideoAmountToUnlockRangeCharacters[index-1] === window.requiredVideoAmountToUnlockRangeCharacters[index-1]) {
+                    button.textContent = 'COLLECT'
+                }
+            }
+            else {
+                if(window.watchedVideoAmountToUnlockMeleeCharacters[index-1] === window.requiredVideoAmountToUnlockMeleeCharacters[index-1]) {
+                    button.textContent = 'COLLECT'
+                }
+            }
+
+            if(index > 0) {
+                if(isRange && index < lastRangeMergeLevel || !isRange && index < lastMeleeMergeLevel){
+                    // console.log('OnClick eventlerine fonksiyon ekle')
+
+                    const button = itemElement.querySelector('.buy-btn');
+                    const rewardedType = containerId + '_' + index
+                    // console.log(rewardedType)
+                    // button.addEventListener('click', () => window.openRewardedWarningPanelBridge(rewardedType, 0));
+                    button.addEventListener('click', () => onClickHeroButton(rewardedType));
+                }
+                else {
+                    button.style.display = 'none'
+                }
+            }
+            else {
+                button.style.display = 'none'
+            }
+            index++
+        });
+    }
+
+    function onClickHeroButton(rewardedType) {
+        // console.log('onClickHeroButton')
+        // console.log(rewardedType)
+
+        const parts = rewardedType.split('_'); // ['rangeGrid', '1']
+        const isRange = parts[0] === 'rangeGrid'
+        const charIndex = parseInt(parts[1], 10); // 1 (int olarak)
+        // console.log(isRange)
+        // console.log(charIndex)
+
+        if(isRange) {
+            if(window.watchedVideoAmountToUnlockRangeCharacters[charIndex-1] === window.requiredVideoAmountToUnlockRangeCharacters[charIndex-1]) {
+                window.claimCharacter(isRange, charIndex)
+                document.getElementById('shop-container').style.display = 'none';
+                window.shopOpen = false;
+                return
+            }
+        }
+        else {
+            if(window.watchedVideoAmountToUnlockMeleeCharacters[charIndex-1] === window.requiredVideoAmountToUnlockMeleeCharacters[charIndex-1]) {
+                window.claimCharacter(isRange, charIndex)
+                document.getElementById('shop-container').style.display = 'none';
+                window.shopOpen = false;
+                return
+            }
+        }
+
+        window.openRewardedWarningPanelBridge(rewardedType, 0)
+    }
+
+    function arrangeOpenCardList() {
+        // console.log('arrangeOpenCardList start')
+        // const openCardList = ['skeleton_1', 'joker_1', 'archer_1']; // Açmak istediğiniz karakterlerin isimlerini buraya ekleyin
+        // const openCardList = []; // Açmak istediğiniz karakterlerin isimlerini buraya ekleyin
+
+        // let lastMeleeMergeLevel = 1, lastRangeMergeLevel = 1
+        for(let i = 0; i < window.playerCharacters.length; i++) {
+            if(window.playerCharacters[i].soldierType === "M" && window.playerCharacters[i].characterLevel > lastMeleeMergeLevel){
+                lastMeleeMergeLevel = window.playerCharacters[i].characterLevel
+            }
+
+            if(window.playerCharacters[i].soldierType === "R" && window.playerCharacters[i].characterLevel > lastRangeMergeLevel){
+                lastRangeMergeLevel = window.playerCharacters[i].characterLevel
+            }
+        }
+
+        // console.log(lastRangeMergeLevel)
+        // console.log(lastMeleeMergeLevel)
+
+        // const lastRangeMergeLevel = parseInt(window.lastRangeMergeLevel, 10)
+        for(let i = 0; i < lastRangeMergeLevel; i++) {
+            openCardList.push(window.rangeCharacterNames[i])
+        }
+
+        for(let i = 0; i < lastMeleeMergeLevel; i++) {
+            openCardList.push(window.meleeCharacterNames[i])
+        }
+
+        // console.log('arrangeOpenCardList end')
+    }
+
+    arrangeOpenCardList()
+    
+    createGridContent(items.range, 'rangeGrid');
+    createGridContent(items.melee, 'meleeGrid');
+    
+    
+    const meleeTab = document.getElementById('meleeTab');
+    const rangeTab = document.getElementById('rangeTab');
+    const meleeContent = document.getElementById('meleeContent');
+    const rangeContent = document.getElementById('rangeContent');
+
+    meleeTab.textContent = window.getTranslation('MELEE')
+    rangeTab.textContent = window.getTranslation('RANGE')
+
+
+    meleeTab.addEventListener('click', function() {
+        meleeContent.style.display = 'block';
+        rangeContent.style.display = 'none';
+        meleeTab.classList.add('active');
+        rangeTab.classList.remove('active');
+    });
+
+    rangeTab.addEventListener('click', function() {
+        meleeContent.style.display = 'none';
+        rangeContent.style.display = 'block';
+        rangeTab.classList.add('active');
+        meleeTab.classList.remove('active');
+    });
+
+    
+    document.getElementById('exitBtn').addEventListener('click', function() {
+        document.getElementById('shop-container').style.display = 'none';
+        // window.dontPermThrow = false;
+        window.shopOpen = false;
+        // window.shopPanelContainer = null;
+    });
+
+    // window.updateButtons = updateButtons;
+    // updateButtons();
+    // function updateButtons() {
+
+    //     if(window.language == "en") {
+    //         rangeTab.textContent = "Range";
+    //         meleeTab.textContent = "Melee";
+    //     } else {
+    //         rangeTab.textContent = "дальний";
+    //         meleeTab.textContent = "ближний";
+    //     }
+    // }
+
+    // // const openCardList = ['skeleton_1', 'joker_1', 'archer_1']; // Açmak istediğiniz karakterlerin isimlerini buraya ekleyin
+    // const openCardList = []; // Açmak istediğiniz karakterlerin isimlerini buraya ekleyin
+
+    // const lastMeleeMergeLevel = parseInt(window.lastMeleeMergeLevel, 10)
+    // for(let i = 0; i < lastMeleeMergeLevel; i++) {
+    //     openCardList.push(window.meleeCharacterNames[i])
+    // }
+
+    // const lastRangeMergeLevel = parseInt(window.lastRangeMergeLevel, 10)
+    // for(let i = 0; i < lastRangeMergeLevel; i++) {
+    //     openCardList.push(window.rangeCharacterNames[i])
+    // }
+    
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 's' || event.key === 'S') {
+            activateUnlockedCards()
+        }
+    });
+
+    function activateUnlockedCards() {
+        // arrangeOpenCardList()
+
+        openCardList.forEach(character => {
+                
+                // `range` veya `melee` içinde olup olmadığını bulmak için kontrol et
+                let element = null;
+                let imgSrc = '';
+                if (items.range.some(item => item.id === character)) {
+                    element = document.getElementById(character);
+                    imgSrc = `./img/rangesUnlock/${character}.png`;
+                } else if (items.melee.some(item => item.id === character)) {
+                    element = document.getElementById(character);
+                    imgSrc = `./img/meleesUnlock/${character}.png`;
+                }
+
+                // console.log(element);
+                // Eğer element bulunduysa güncellemeleri uygula
+                if (element) {
+                    // Resim güncellemesi
+                    const imgElement = element.parentElement.querySelector('.melee-img, .range-img');
+                    if (imgElement) {
+                        imgElement.src = imgSrc;
+                    }
+
+                    // Arka plan kartını güncelle
+                    const lockCardElement = element.parentElement.querySelector('.lock-card');
+                    if (lockCardElement) {
+                        lockCardElement.style.backgroundImage = "url('./img/shopPopup/open-card.png')";
+                    }
+
+                    // Kilit simgesini kaldır
+                    const lockIcon = element.parentElement.querySelector('.lock-icon');
+                    if (lockIcon) {
+                        lockIcon.style.display = 'none';
+                    }
+
+                    // İsim rengini beyaz yap ve gölge efekti ekle
+                    const itemNameElement = element.parentElement.querySelector('.item-name');
+                    if (itemNameElement) {
+                        itemNameElement.style.color = '#ffffff';
+                        itemNameElement.style.textShadow = '2px 2px 3px #000000, -1px -1px 2px #000000'; // Siyah stroke efekti
+                    }
+                }
+            });
+    }
+
+    // Dinamik font size güncelleme fonksiyonu
+    function updateFontSize(span) {
+        const length = span.textContent.length;
+        
+        // Varsayılan font size (0.9rem) ve küçülme oranı
+        const baseFontSize = 0.9; // rem
+        const minFontSize = 0.5; // rem
+        const shrinkRate = 0.15; // Uzunluk başına küçülme miktarı
+
+        // Karakter uzunluğuna göre font size hesaplama
+        const newFontSize = Math.max(minFontSize, baseFontSize - (length - 2) * shrinkRate);
+        span.style.fontSize = `${newFontSize}rem`;
+    }
+
+    function activateRangeScroll() {
+        const rangeScroll = document.querySelector('.range-content');
+
+        let isMouseDown = false;
+        let startY;
+        let scrollTop;
+
+        rangeScroll.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            startY = e.pageY - rangeScroll.offsetTop;
+            scrollTop = rangeScroll.scrollTop;
+            rangeScroll.style.cursor = 'grabbing';
+            e.preventDefault(); // Seçim metnini engeller
+        });
+
+        rangeScroll.addEventListener('mouseleave', () => {
+            isMouseDown = false;
+            rangeScroll.style.cursor = 'grab';
+        });
+
+        rangeScroll.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            rangeScroll.style.cursor = 'grab';
+        });
+
+        rangeScroll.addEventListener('mousemove', (e) => {
+            if (!isMouseDown) return;
+            e.preventDefault();
+            const y = e.pageY - rangeScroll.offsetTop;
+            const walk = (y - startY) * 1; // Kaydırma hızı için çarpan
+            rangeScroll.scrollTop = scrollTop - walk;
+        });
+
+        // Dokunmatik olaylar
+        rangeScroll.addEventListener('touchstart', (e) => {
+            isMouseDown = true;
+            startY = e.touches[0].pageY - rangeScroll.offsetTop; // İlk dokunma pozisyonu
+            scrollTop = rangeScroll.scrollTop;
+        });
+
+        rangeScroll.addEventListener('touchmove', (e) => {
+            if (!isMouseDown) return;
+            const y = e.touches[0].pageY - rangeScroll.offsetTop; // Hareketli dokunma pozisyonu
+            const walk = (y - startY) * 1; // Kaydırma hızı için çarpan
+            rangeScroll.scrollTop = scrollTop - walk;
+            e.preventDefault(); // Dokunma olayında kaydırmayı engeller
+        });
+
+        rangeScroll.addEventListener('touchend', () => {
+            isMouseDown = false;
+        });
+    }
+
+    function activateMeleeScroll() {
+        const meleeScroll = document.querySelector('.melee-content');
+
+        let isMouseDown = false;
+        let startY;
+        let scrollTop;
+
+        meleeScroll.addEventListener('mousedown', (e) => {
+            isMouseDown = true;
+            startY = e.pageY - meleeScroll.offsetTop;
+            scrollTop = meleeScroll.scrollTop;
+            meleeScroll.style.cursor = 'grabbing';
+            e.preventDefault(); // Seçim metnini engeller
+        });
+
+        meleeScroll.addEventListener('mouseleave', () => {
+            isMouseDown = false;
+            meleeScroll.style.cursor = 'grab';
+        });
+
+        meleeScroll.addEventListener('mouseup', () => {
+            isMouseDown = false;
+            meleeScroll.style.cursor = 'grab';
+        });
+
+        meleeScroll.addEventListener('mousemove', (e) => {
+            if (!isMouseDown) return;
+            e.preventDefault();
+            const y = e.pageY - meleeScroll.offsetTop;
+            const walk = (y - startY) * 1; // Kaydırma hızı için çarpan
+            meleeScroll.scrollTop = scrollTop - walk;
+        });
+
+        // Dokunmatik olaylar
+        meleeScroll.addEventListener('touchstart', (e) => {
+            isMouseDown = true;
+            startY = e.touches[0].pageY - meleeScroll.offsetTop; // İlk dokunma pozisyonu
+            scrollTop = meleeScroll.scrollTop;
+        });
+
+        meleeScroll.addEventListener('touchmove', (e) => {
+            if (!isMouseDown) return;
+            const y = e.touches[0].pageY - meleeScroll.offsetTop; // Hareketli dokunma pozisyonu
+            const walk = (y - startY) * 1; // Kaydırma hızı için çarpan
+            meleeScroll.scrollTop = scrollTop - walk;
+            e.preventDefault(); // Dokunma olayında kaydırmayı engeller
+        });
+
+        meleeScroll.addEventListener('touchend', () => {
+            isMouseDown = false;
+        });
+    }
+
+    function resetRangeTab() {
+        // console.log('resetRangeTab')
+        document.getElementById('rangeContent').scrollTop = 0
+    }
+
+    function resetMeleeTab() {
+        // console.log('resetMeleeTab')
+        document.getElementById('meleeContent').scrollTop = 0
+    }
+
+    activateUnlockedCards()
+    
+</script>
+</body>
+</html>

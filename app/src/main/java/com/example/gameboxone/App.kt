@@ -29,7 +29,7 @@ class App : Application(){
         private const val TAG = "App"
         private var instance: App? = null
 
-//        fun getInstance(): App = instance!!
+        fun getInstance(): App = instance!!
     }
 
     init {

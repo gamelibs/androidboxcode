@@ -80,7 +80,7 @@ sealed class GameEvent {
 
 
     // 游戏安装相关事件
-    data class GameInstalled(val game: Custom.baseGameData) : GameEvent()
+    data class GameInstalled(val game: String) : GameEvent()
 
     // 游戏启动事件,直接由导航事件处理
 //    data class GameLaunched(val loadPath: String?) : GameEvent()
@@ -122,4 +122,9 @@ sealed class GameEvent {
      * 游戏进度更新
      */
     data class GameProgress(val gameId: String, val progress: Float) : GameEvent()
+
+
+    data class GameUpdated(val game: String) : GameEvent()
+
+    data class GameUninstalled(val game: String) : GameEvent()
 }

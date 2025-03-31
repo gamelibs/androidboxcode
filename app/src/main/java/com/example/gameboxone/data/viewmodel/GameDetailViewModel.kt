@@ -11,6 +11,7 @@ import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.state.GameDetailState
 import com.example.gameboxone.data.state.GameResourceState
 import com.example.gameboxone.event.GameEvent
+import com.example.gameboxone.manager.MyGameManager
 import com.example.gameboxone.navigation.NavigationEvent
 import com.example.gameboxone.service.MessageService
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -31,6 +32,7 @@ class GameDetailViewModel @Inject constructor(
     private val resourceManager: ResourceManager,
     eventManager: EventManager,
     private val messageService: MessageService,
+    private val myGameManager: MyGameManager,
     savedStateHandle: SavedStateHandle
 ) : GameViewModel(eventManager) {
 
@@ -59,16 +61,30 @@ class GameDetailViewModel @Inject constructor(
                 Log.d(TAG, "开始加载游戏详情: $gameId")
 
                 // 优先从缓存获取游戏数据
-                val game = dataManager.getCachedGameData(gameId)
+                val gameData = dataManager.getCachedGameData(gameId)
 
-
-                if (game != null) {
+                if (gameData != null) {
+                    // 创建完整的HotGameData对象，而不是只包含ID的空对象
+//                    val hotGameData = Custom.HotGameData(
+//                        id = gameData.id,
+//                        name = gameData.name,
+//                        gameId = gameData.gameId ?: gameData.id,
+//                        gameRes = gameData.gameRes ?: "",
+//                        description = gameData.description ?: "",
+//                        iconUrl = gameData.iconUrl,
+//                        downloadUrl = gameData.downloadUrl ?: "",
+//                        isLocal = gameData.isLocal,
+//                        localPath = gameData.localPath ?: "",
+//                        rating = gameData.rating ?: 0,
+//                        patch = gameData.patch ?: 1
+//                    )
+                    
                     _state.value = GameDetailState(
-                        game = game,//Custom.ToHotData(game.id?:"101"),
+                        game = gameData,
                         isLoading = false,
                         error = null
                     )
-                    Log.d(TAG, "游戏详情加载成功: ${game.name}")
+                    Log.d(TAG, "游戏详情加载成功: ${gameData.name}, 详细信息已保存到state")
 
                 } else {
                     handleError("未找到游戏数据")
@@ -89,33 +105,33 @@ class GameDetailViewModel @Inject constructor(
     /**
      * 刷新游戏数据
      */
-    fun refreshGameData(gameId:String) {
-//        loadGameDetails(gameId)
-        viewModelScope.launch {
-            try {
-                setLoading(true)
-                // 强制从数据库重新加载
-                val game = dataManager.getGameById(gameId)
-
-                if (game != null) {
-                    _state.value = GameDetailState(
-                        game = game,//Custom.ToBaseData(game.id?:"101"),
-                        isLoading = false,
-                        error = null
-                    )
-                    // 刷新时发送加载完成事件
-                    eventManager.emitGameEvent(GameEvent.GameLoaded(Custom.ToBaseData(game.id,game.name,game.iconUrl)))
-                } else {
-                    handleError("未找到游戏数据")
-                }
-            } catch (e: Exception) {
-                handleError("刷新游戏数据失败：${e.message}")
-            } finally {
-                setLoading(false)
-            }
-        }
-
-    }
+//    fun refreshGameData(gameId:String) {
+////        loadGameDetails(gameId)
+//        viewModelScope.launch {
+//            try {
+//                setLoading(true)
+//                // 强制从数据库重新加载
+//                val game = dataManager.getGameById(gameId)
+//
+//                if (game != null) {
+//                    _state.value = GameDetailState(
+//                        game = game,//Custom.ToBaseData(game.id?:"101"),
+//                        isLoading = false,
+//                        error = null
+//                    )
+//                    // 刷新时发送加载完成事件
+//                    eventManager.emitGameEvent(GameEvent.GameLoaded(Custom.ToBaseData(game.id,game.name,game.iconUrl)))
+//                } else {
+//                    handleError("未找到游戏数据")
+//                }
+//            } catch (e: Exception) {
+//                handleError("刷新游戏数据失败：${e.message}")
+//            } finally {
+//                setLoading(false)
+//            }
+//        }
+//
+//    }
 
     /**
      * 更新状态的扩展函数
@@ -185,7 +201,7 @@ class GameDetailViewModel @Inject constructor(
     }
 
     /**
-     * 处理游戏启动
+     * 处理游戏启动 - 使用优化后的资源检查流程
      */
     fun launchGame() {
         viewModelScope.launch {
@@ -210,7 +226,6 @@ class GameDetailViewModel @Inject constructor(
                                 localPath = resourceState.localPath
                             )
                         )
-
                     }
 
                     is GameResourceState.LoadingFromBackup -> {
@@ -223,8 +238,8 @@ class GameDetailViewModel @Inject constructor(
                             )
                         }
                         
-                        // 等待加载完成
-                        resourceManager.loadFromBackupDirectory(game).onSuccess { localPath ->
+                        // 使用MyGameManager安装游戏 - 包括资源提取和数据库操作
+                        myGameManager.installGameFromBackup(game).onSuccess { localPath ->
                             // 加载成功，启动游戏
                             eventManager.emitNavigationEvent(
                                 NavigationEvent.NavigateToGamePlayer(
@@ -232,9 +247,9 @@ class GameDetailViewModel @Inject constructor(
                                     localPath = localPath
                                 )
                             )
-
-                        }.onFailure { _ ->
-                            // 加载失败，需要从网络下载
+                        }.onFailure { error ->
+                            // 加载失败，尝试网络下载
+                            handleError("从备份目录加载失败: ${error.message}")
                             handleNeedDownload(game)
                         }
                     }
@@ -267,8 +282,15 @@ class GameDetailViewModel @Inject constructor(
     private fun handleNeedDownload(game: Custom.HotGameData) {
         Log.d(TAG, "游戏资源不存在，需要下载: ${game.name}")
         
+        // 检查URL是否有效
+        if (game.downloadUrl.isBlank() || !game.downloadUrl.startsWith("http")) {
+            Log.w(TAG, "下载URL无效，尝试直接从本地资源获取: ${game.downloadUrl}")
+            tryLoadFromLocalAssets(game)
+            return
+        }
+        
         // 获取下载信息
-        val downloadInfo = resourceManager.getDownloadInfo(game)
+        val downloadInfo = resourceManager.getDownloadInfo(game.downloadUrl, game.gameRes)
         
         // 显示下载对话框
         setState {
@@ -280,6 +302,41 @@ class GameDetailViewModel @Inject constructor(
                     targetPath = downloadInfo.targetPath
                 )
             )
+        }
+    }
+
+    /**
+     * 尝试直接从本地资源获取游戏 - 优化版
+     */
+    private fun tryLoadFromLocalAssets(game: Custom.HotGameData) {
+        viewModelScope.launch {
+            try {
+                setState { copy(isLoading = true, loadingMessage = "正在从本地资源加载游戏...") }
+                
+                // 使用MyGameManager统一处理资源加载和数据库操作
+                myGameManager.installGameFromBackup(game).fold(
+                    onSuccess = { localPath ->
+                        Log.d(TAG, "从本地资源成功加载游戏: ${game.name}")
+                        // 成功加载，启动游戏
+                        eventManager.emitNavigationEvent(
+                            NavigationEvent.NavigateToGamePlayer(
+                                gameId = game.id,
+                                localPath = localPath
+                            )
+                        )
+                        setState { copy(isLoading = false, loadingMessage = null) }
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "从本地资源加载游戏失败: ${game.name}", error)
+                        handleError("无法加载游戏: ${error.message}")
+                        setState { copy(isLoading = false, loadingMessage = null) }
+                    }
+                )
+            } catch (e: Exception) {
+                Log.e(TAG, "尝试从本地资源加载游戏时出错", e)
+                handleError("从本地资源加载游戏失败: ${e.message}")
+                setState { copy(isLoading = false, loadingMessage = null) }
+            }
         }
     }
 
@@ -319,7 +376,14 @@ class GameDetailViewModel @Inject constructor(
 
                 // 发送下载开始事件
                 state.value.game?.let { game ->
-                    emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id,game.name,game.iconUrl)))
+                    emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
+                }
+
+                // 检查URL是否有效，避免MalformedURLException
+                if (downloadInfo.downloadUrl.isBlank() || !downloadInfo.downloadUrl.startsWith("http")) {
+                    Log.w(TAG, "下载URL无效，尝试从本地资源获取: ${downloadInfo.downloadUrl}")
+                    state.value.game?.let { tryLoadFromLocalAssets(it) }
+                    return@launch
                 }
 
                 resourceManager.downloadAndInstallGame(
@@ -328,58 +392,56 @@ class GameDetailViewModel @Inject constructor(
                 ) { progress ->
                     // 更新下载进度
                     setState { copy(downloadProgress = progress) }
-                    // ...发送进度事件
-                }.onSuccess { _ ->
-                    // 下载成功
-                    setState {
-                        copy(
-                            isDownloading = false,
-                            downloadProgress = 0f,
-                            loadingMessage = null
-                        )
+                }.fold(
+                    onSuccess = { localPath ->
+                        // 下载成功
+                        setState {
+                            copy(
+                                isDownloading = false,
+                                downloadProgress = 0f,
+                                loadingMessage = null
+                            )
+                        }
+                        
+                        // 发送完成事件
+                        state.value.game?.let { game ->
+                            emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
+                        }
+                        // 下载完成后再次尝试启动游戏
+                        launchGame()
+                    },
+                    onFailure = { error ->
+                        // 下载失败后尝试从本地资源获取
+                        Log.e(TAG, "游戏下载失败，尝试从本地资源获取", error)
+                        
+                        // 重置下载状态
+                        setState {
+                            copy(
+                                isDownloading = false,
+                                downloadProgress = 0f,
+                                loadingMessage = "尝试从本地资源获取游戏..."
+                            )
+                        }
+                        
+                        // 尝试从本地资源获取
+                        state.value.game?.let { tryLoadFromLocalAssets(it) }
                     }
-                    
-                    // 发送完成事件
-                    state.value.game?.let { game ->
-                        emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id,game.name,game.iconUrl)))
-                    }
-                    // 下载完成后再次尝试启动游戏
-                    launchGame()
-                }.onFailure { e ->
-                    // 下载失败处理
-                    Log.e(TAG, "游戏下载失败", e)
-                    
-                    // 重置下载状态
-                    setState {
-                        copy(
-                            isDownloading = false,
-                            downloadProgress = 0f,
-                            loadingMessage = null
-                        )
-                    }
-                    
-                    // 显示错误消息
-                    handleError("游戏下载失败: ${e.message}")
-                    
-                    // 发送下载失败事件
-                    state.value.game?.let { _ ->
-                        emitGameEvent(GameEvent.Error.Network("游戏下载失败: ${e.message}"))
-                    }
-                }
+                )
             } catch (e: Exception) {
-                // 异常处理
-                Log.e(TAG, "下载过程中发生异常", e)
+                // 处理异常情况
+                Log.e(TAG, "下载过程出现异常，尝试从本地资源获取", e)
                 
-                // 确保无论如何都重置下载状态
+                // 重置下载状态
                 setState {
                     copy(
                         isDownloading = false,
                         downloadProgress = 0f,
-                        loadingMessage = null
+                        loadingMessage = "尝试从本地资源获取游戏..."
                     )
                 }
                 
-                handleError("下载过程中发生错误: ${e.message}")
+                // 尝试从本地资源获取
+                state.value.game?.let { tryLoadFromLocalAssets(it) }
             }
         }
     }

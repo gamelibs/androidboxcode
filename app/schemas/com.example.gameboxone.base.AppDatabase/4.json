@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 4,
-    "identityHash": "ef10f66c3762cefa74da74eb63016ade",
+    "identityHash": "1c27f0b75a8b33f9583bfe7dd865d19f",
     "entities": [
       {
         "tableName": "app_config",
@@ -38,7 +38,7 @@
       },
       {
         "tableName": "game_config",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `gameId` TEXT NOT NULL, `pubId` INTEGER NOT NULL, `ret` INTEGER NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `rating` INTEGER NOT NULL, `gameRes` TEXT NOT NULL, `info` TEXT, `diff` INTEGER NOT NULL, `download` TEXT NOT NULL, `downicon` TEXT, `patch` INTEGER NOT NULL, `timestamp` TEXT, `isLocal` INTEGER NOT NULL, `localPath` TEXT, `size` TEXT, `categories` TEXT NOT NULL, `tags` TEXT NOT NULL)",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `gameId` TEXT NOT NULL, `pubId` INTEGER NOT NULL, `ret` INTEGER NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `rating` INTEGER NOT NULL, `gameRes` TEXT NOT NULL, `info` TEXT, `diff` INTEGER NOT NULL, `download` TEXT NOT NULL, `downicon` TEXT, `patch` INTEGER NOT NULL, `timestamp` TEXT, `isLocal` INTEGER NOT NULL, `localPath` TEXT NOT NULL, `size` TEXT NOT NULL, `categories` TEXT NOT NULL, `tags` TEXT NOT NULL)",
         "fields": [
           {
             "fieldPath": "id",
@@ -134,13 +134,13 @@
             "fieldPath": "localPath",
             "columnName": "localPath",
             "affinity": "TEXT",
-            "notNull": false
+            "notNull": true
           },
           {
             "fieldPath": "size",
             "columnName": "size",
             "affinity": "TEXT",
-            "notNull": false
+            "notNull": true
           },
           {
             "fieldPath": "categories",
@@ -163,12 +163,98 @@
         },
         "indices": [],
         "foreignKeys": []
+      },
+      {
+        "tableName": "my_games",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`gameId` TEXT NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `gameRes` TEXT NOT NULL, `description` TEXT NOT NULL, `downloadUrl` TEXT NOT NULL, `localPath` TEXT NOT NULL, `patch` INTEGER NOT NULL, `size` TEXT NOT NULL, `installTime` INTEGER NOT NULL, `lastPlayTime` INTEGER, `playCount` INTEGER NOT NULL, PRIMARY KEY(`gameId`))",
+        "fields": [
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "icon",
+            "columnName": "icon",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameRes",
+            "columnName": "gameRes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "downloadUrl",
+            "columnName": "downloadUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localPath",
+            "columnName": "localPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "patch",
+            "columnName": "patch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "size",
+            "columnName": "size",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "installTime",
+            "columnName": "installTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastPlayTime",
+            "columnName": "lastPlayTime",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "playCount",
+            "columnName": "playCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "gameId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
       }
     ],
     "views": [],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ef10f66c3762cefa74da74eb63016ade')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '1c27f0b75a8b33f9583bfe7dd865d19f')"
     ]
   }
 }

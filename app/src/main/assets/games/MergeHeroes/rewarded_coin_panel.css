@@ -1,0 +1,389 @@
+canvas {
+    touch-action: none; /* Dokunma hareketlerinin sayfayı kaydırmasını engeller */
+}
+
+span {
+    pointer-events: none;
+}
+
+body, img, p, span {
+    -webkit-user-select: none;    /* Seçimi engelle (Safari, iOS) */
+    -moz-user-select: none;       /* Seçimi engelle (Firefox) */
+    -ms-user-select: none;        /* Seçimi engelle (Internet Explorer) */
+    user-select: none;            /* Seçimi engelle (Diğer tarayıcılar) */
+    
+    -webkit-touch-callout: none;  /* Uzun basma menüsünü devre dışı bırak */
+}
+
+.rewarded-coin-panel {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /*background-color: black;*/
+    background-color: rgba(5, 6, 34, 0.7);
+    /*background-color: #050622;*/
+    /*opacity: 0.7;*/
+    display: none;
+}
+
+.rewarded-warning-panel {
+    z-index: 10001;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /*background-color: black;*/
+    background-color: rgba(5, 6, 34, 0.7);
+    /*background-color: #050622;*/
+    /*opacity: 0.7;*/
+    display: none;
+}
+
+.rewarded-bg {
+    position: absolute;
+    top: 48%;
+    left: 50%;
+    width: 32vw;
+    height: calc(32vw * 0.82);;
+    transform: translateX(-50%) translateY(-50%);
+    /* background-color: rebeccapurple; */
+}
+
+.rewarded-coin-bg-img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    transform: translateX(-50%) translateY(-50%);
+    object-fit: contain;
+    box-sizing: border-box;
+}
+
+.rewareded-coin-close-button {
+    position: fixed;
+    width: 10%;
+    height: auto;
+    top: 2.5%;
+    right: 2.5%;
+    background-color: transparent;
+    border: none;
+    transition: transform 0.15s ease-in-out;
+}
+.rewareded-coin-close-button:hover {
+    transform: scale(1.05);
+}
+
+.rewareded-coin-close-button img {
+    /*position: relative;*/
+    width: 100%;
+    height: 100%;
+}
+
+.rewarded-coin-header-text {
+    /* background-color: yellow; */
+    position: absolute;
+    width: 70%;
+    height: 15%;
+    top: 7.5%;
+    left: 50%;
+    /* font-size: 1.8vw; */
+    font-size: 1.5vw;
+    font-family: english_font, serif;
+    text-align: center;
+    /* vertical-align: middle;
+    justify-content: center;
+    display: flex; */
+
+    /* text-shadow:
+            0.2vw 0.2vw 4px #2a3894,
+            -0.2vw 0.2vw 4px #2a3894,
+            0.2vw -0.2vw 4px #2a3894,
+            -0.2vw -0.2vw 4px #2a3894; */
+
+    text-shadow:
+        0.2vw 0.2vw 4px #1b2460,
+        -0.2vw 0.2vw 4px #1b2460,
+        0.2vw -0.2vw 4px #1b2460,
+        -0.2vw -0.2vw 4px #1b2460;
+
+    /* text-shadow: 0.2vw 0.2vw 4px #000000; */
+    
+    color: white;
+    transform: translateX(-50%);
+}
+
+.rewarded-coin-shine-img {
+    position: absolute;
+    top: 45%;
+    left: 50%;
+    width: 47%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.rewarded-warning-shine-img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 47%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.rewarded-coin-img {
+    position: absolute;
+    top: 42%;
+    left: 50%;
+    width: 32%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.rewarded-warning-img {
+    position: absolute;
+    top: 47%;
+    left: 50%;
+    width: 30%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.rewarded-coin-amount-text {
+    /* background-color: black; */
+    position: absolute;
+    top: 32%;
+    right: 10%;
+    width: 20%;
+    font-size: 2vw;
+    font-family: english_font, serif;
+    white-space: nowrap;
+    text-align: left;
+    /* justify-content: left; */
+    color: #383b95;
+    /* transform: translateX(-50%); */
+    transform-origin: left;
+}
+
+.rewarded-warning-description-text {
+    /* background-color: black; */
+    position: absolute;
+    top: 22%;
+    left: 50%;
+    width: 80%;
+    font-size: 1.3vw;
+    font-family: english_font, serif;
+    white-space: nowrap;
+    text-align: center;
+    /* justify-content: left; */
+    color: #383b95;
+    transform: translateX(-50%);
+    transform-origin: left;
+}
+
+.rewarded-coin-button-container {
+    position: absolute;
+    top: 66%;
+    left: 50%;
+    width: 15vw;
+    height: calc(15vw * 0.3);
+    /* background-color: red; */
+    transform: translateX(-50%);
+    transition: transform 0.2s ease-in-out;
+}
+
+.rewarded-coin-button-container:hover {
+    transform: translateX(-50%) scale(1.025);
+}
+
+.rewarded-warning-button-container {
+    position: absolute;
+    top: 70%;
+    left: 50%;
+    width: 15vw;
+    height: calc(15vw * 0.3);
+    /* background-color: red; */
+    transform: translateX(-50%);
+    transition: transform 0.2s ease-in-out;
+}
+
+.rewarded-warning-button-container:hover {
+    transform: translateX(-50%) scale(1.025);
+}
+
+.rewarded-coin-button {
+    /* background-color: yellow; */
+    position: absolute;
+    background-image: url("./sprites/main_menu/green_buy_button.png");
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: center; /* Görüntüyü ortalar */
+    background-color: transparent;
+    border: none;
+    top: 50%;
+    left: 50%;
+    width: 15vw;
+    height: calc(15vw * 0.3);
+    /* object-fit: contain; */
+    transform: translateX(-50%) translateY(-50%);
+}
+.rewarded-coin-button:hover {
+    opacity: 0.9;
+}
+
+.rewarded-coin-video-icon {
+    position: absolute;
+    top: 50%;
+    left: 18%;
+    width: 1.6vw;
+    height: 1.28vw;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+}
+
+.rewarded-warning-video-icon {
+    position: absolute;
+    top: 50%;
+    left: 27%;
+    width: 1.5vw;
+    height: 1.2vw;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+}
+
+.rewarded-coin-text {
+    /* background-color: yellow; */
+    position: absolute;
+    top: 52%;
+    left: 32%;
+    width: 50%;
+    height: 50%;
+    font-size: 1vw;
+    color: #1c4005;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+
+    text-align: center;
+    justify-content: center;
+    display: flex;
+
+    text-shadow:
+        0vw 0.2vw 0px #9cdc98;
+        /* 0.15vw 0.15vw 0px #86bc84,
+        -0.15vw 0.15vw 0px #86bc84,
+        0.15vw -0.15vw 0px #86bc84,
+        -0.15vw -0.15vw 0px #86bc84; */
+}
+
+.rewarded-warning-text {
+    /* background-color: yellow; */
+    position: absolute;
+    top: 60%;
+    left: 41%;
+    width: 40%;
+    height: 50%;
+    font-size: 1.2vw;
+    color: #1c4005;
+    transform: translateY(-50%);
+    text-align: left;
+    pointer-events: none;
+    user-select: none;
+
+    text-shadow:
+        0vw 0.2vw 0px #9cdc98;
+        /* 0.15vw 0.15vw 0px #86bc84,
+        -0.15vw 0.15vw 0px #86bc84,
+        0.15vw -0.15vw 0px #86bc84,
+        -0.15vw -0.15vw 0px #86bc84; */
+}
+
+@media (max-width: 768px) and (pointer: coarse) {
+    .rewarded-bg {
+        width: 75vw;
+        height: calc(75vw * 0.82);;
+    }
+
+    .rewarded-coin-shine-img {
+        width: 53%;
+        height: auto;
+        top: 48%;
+    }
+
+    .rewarded-warning-shine-img {
+        width: 53%;
+        height: auto;
+        top: 53%;
+    }
+
+    .rewarded-coin-img {
+        width: 34%;
+        height: auto;
+    }
+
+    .rewarded-warning-img {
+        width: 32%;
+        height: auto;
+    }
+
+    .rewarded-coin-amount-text {
+        font-size: 4.25vw;
+    }
+
+    .rewarded-warning-description-text {
+        font-size: 2.6vw;
+    }
+
+    .rewarded-coin-header-text {
+        font-size: 3.6vw;
+    }
+
+    .rewarded-coin-button-container {
+        width: 42.5vw;
+        height: calc(25vw * 0.3);
+        top: 73%;
+    }
+
+    .rewarded-warning-button-container {
+        width: 42.5vw;
+        height: calc(25vw * 0.3);
+        top: 76%;
+    }
+
+    .rewarded-coin-button {
+        width: 42.5vw;
+        height: calc(42.5vw * 0.3);
+    }
+
+    .rewarded-coin-video-icon {
+        /* background-color: yellow; */
+        /* width: 16.25%;
+        height: auto; */
+        width: 4.8vw;
+        height: 3.84vw;
+        left: 16%;
+    }
+
+    .rewarded-warning-video-icon {
+        /* width: 12%;
+        height: auto; */
+        width: 4.8vw;
+        height: 3.84vw;
+        left: 26%;
+    }
+
+    .rewarded-coin-text {
+        /* background-color: red; */
+        top: 36%;
+        font-size: 3vw;
+        left: 36%;
+    }
+
+    .rewarded-warning-text {
+        /* background-color: yellow; */
+        font-size: 3vw;
+        top: 55%;
+        left: 44%;
+    }
+}

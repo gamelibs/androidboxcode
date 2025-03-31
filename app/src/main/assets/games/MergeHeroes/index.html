@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <!-- <meta name="viewport" content="width=device-width, initial-scale=1.0"> -->
+    <!-- <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"> -->
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+
+    <title>Merge Heroes</title>
+        <link rel="stylesheet" href="styles.css">
+        <link rel="stylesheet" href="level_end_styles.css">
+        <link rel="stylesheet" href="rewarded_coin_panel.css">
+        <link rel="stylesheet" href="level_panel.css">
+
+
+        <script>
+           
+  
+
+
+        </script>
+     
+    <script type="module" src="ovo.js"></script>
+  <!-- <script type="module" crossorigin src="./assets/index-COfgdwNI-code.js"></script> -->
+</head>
+<body>
+
+
+<div id="adcontent">
+    <script>
+             const adContentDiv = document.querySelector("#adcontent");
+
+            // 检查元素是否存在
+            if (adContentDiv) {
+                // 设置元素的样式
+                adContentDiv.style.width = "100%";
+                adContentDiv.style.height = "100%";
+                adContentDiv.style.position = "fixed";
+                adContentDiv.style.zIndex = 1;
+            } else {
+                console.error("未找到具有 id 为 'adcontent' 的元素。");
+            }           
+    </script>
+<div id="leaderboard-container"></div>
+<div id="shop-container"></div>
+
+<div class="character-unlock-menu" id="character-unlock-menu">
+    <button class="character-unlock-continue-button" id="character-unlock-continue-button">
+        <img src="./sprites/main_menu/Fight_Button.png" alt="Continue" class="character-unlock-continue-button-bg">
+        <span class="character-unlock-continue-text" data-key="CONTINUE">CONTINUE</span>
+    </button>
+</div>
+
+
+<div class="main-menu" id="main-menu">
+
+    
+    <div class="main-menu-top-shadow" id="main-menu-top-shadow"></div>
+    <div class="main-menu-bottom-shadow" id="main-menu-bottom-shadow">
+    </div>
+    
+    <!-- <div class="level-panel">
+        <img src="./sprites/main_menu/black_button_back.png" alt="Level Background">
+        <span class="level-text" id="level-text">LEVEL 54</span>
+    </div> -->
+    
+
+    <!-- <div class="leaderboard-button-panel">
+        <img src="./sprites/main_menu/black_button_back.png" alt="Leaderboard button background" class="leaderboard-button-bg">
+        <img src="./sprites/main_menu/leader_icon.png" alt="Leaderboard icon" class="leaderboard-icon">
+        <span class="leaderboard-text" id="leaderboard-text" data-key="Leaderboard">Leader</span>
+        <button class="leaderboard-button" id="leaderboard-button"></button>
+    </div> -->
+
+    <!-- Sağ üstteki coin paneli -->
+    <div class="coin-panel">
+        <img src="./sprites/main_menu/black_button_back.png" alt="Coin Background" class="coin-panel-bg">
+        <img src="./sprites/main_menu/coin.png" alt="Coin icon" class="coin-icon" id="coin-icon">
+        <button class="rewarded-coin-plus-button" id="rewarded-coin-plus-button">
+            <!-- <img src="./sprites/main_menu/Plus_button.png" alt="Buy coin icon" class="buy-coin-icon"> -->
+        </button>
+        <span class="coin-text" id="coin-text">12345</span>
+    </div>
+
+    <div class="settings-button-panel">
+        <button class="settings-button" id="settings-button">
+            <img src="./sprites/main_menu/settings-button.png" alt="settings button" class="settings-image">
+        </button>
+    </div>
+
+
+    <!-- Alt menüdeki butonlar -->
+    <div class="bottom-menu" id="bottom-menu">
+        <div class="range-menu-button" id="range-menu-button">
+
+            <button class="range-button" id="rangeSoldierButton">
+                <!-- <img src="./sprites/main_menu/Melee_Range_Button.png" alt="Range" class="range-button-bg">
+                <img src="./sprites/main_menu/range_icon.png" alt="Range_icon" class="range-icon">
+                <span class="range-text" data-key="RANGE">RANGE</span> -->
+            </button>
+
+            <img src="./sprites/main_menu/Melee_Range_Button.png" alt="Range" class="range-button-bg">
+            <img src="./sprites/main_menu/range_icon.png" alt="Range_icon" class="range-icon">
+            <span class="range-text" data-key="RANGE">RANGE</span>
+
+            <div class="soldier-ads" id="range-soldier-ads">
+                <img src="./sprites/main_menu/red_back.png" alt="Range" class="range-soldier-ads-bg">
+                <img src="./sprites/main_menu/video_icon.png" alt="Soldier-ad-icon" class="soldier-ad-icon">
+                <!-- <span class="soldier-ad-text" data-key="AD">AD</span> -->
+            </div>
+
+            <div class="soldier-upgrade" id="range-soldier-upgrade">
+                <img src="./sprites/main_menu/green_back.png" alt="Range upgrade" class="range-soldier-upgrade-bg">
+
+                <div class="soldier-upgrade-container">
+                    <img src="./sprites/main_menu/coin_flat_icon.png" alt="Soldier-upgrade-icon" class="soldier-upgrade-icon">
+                    <span class="soldier-upgrade-text" id="range-soldier-upgrade-cost">70</span>
+                </div>
+            </div>
+
+            <img src="./sprites/tutorial/hand_icon.png" alt="Hand icon" class="hand-icon" id="range-button-hand-icon">
+        </div>
+        <div class="melee-menu-button" id="melee-menu-button">
+            <button class="melee-button" id="meleeSoldierButton">
+                <!-- <img src="./sprites/main_menu/Melee_Range_Button.png" alt="Melee" class="melee-button-bg">
+                <img src="./sprites/main_menu/melee_icon.png" alt="Melee_icon" class="melee-icon">
+                <span class="melee-text" data-key="MELEE">MELEE</span> -->
+            </button>
+
+            <img src="./sprites/main_menu/Melee_Button.png" alt="Melee" class="melee-button-bg">
+            <img src="./sprites/main_menu/melee_icon.png" alt="Melee_icon" class="melee-icon">
+            <span class="melee-text" data-key="MELEE">MELEE</span>
+
+            <div class="soldier-ads" id="melee-soldier-ads">
+                <img src="./sprites/main_menu/red_back.png" alt="Melee" class="melee-soldier-ads-bg">
+
+                <div class="soldier-ad-container">
+                    <img src="./sprites/main_menu/video_icon.png" alt="Soldier-ad-icon" class="soldier-ad-icon">
+                    <!-- <span class="soldier-ad-text" data-key="AD">AD</span> -->
+                </div>
+            </div>
+
+            <div class="soldier-upgrade" id="melee-soldier-upgrade">
+                <img src="./sprites/main_menu/green_back.png" alt="Range upgrade" class="melee-soldier-upgrade-bg">
+
+                <div class="soldier-upgrade-container">
+                    <img src="./sprites/main_menu/coin_flat_icon.png" alt="Soldier-upgrade-icon" class="soldier-upgrade-icon">
+                    <span class="soldier-upgrade-text" id="melee-soldier-upgrade-cost">50</span>
+                </div>
+            </div>
+
+            <img src="./sprites/tutorial/hand_icon.png" alt="Hand icon" class="hand-icon" id="melee-button-hand-icon">
+        </div>
+        <div class="fight-menu-button" id="fight-menu-button">
+            <button class="fight-button" id="fightButton">
+                <!-- <img src="./sprites/main_menu/Fight_Button.png" alt="Fight" class="fight-button-img">
+                <img src="./sprites/main_menu/Fight_icon.png" alt="Fight_icon" class="fight-icon">
+                <span class="fight-text" data-key="FIGHT">FIGHT</span> -->
+            </button>
+
+            <img src="./sprites/main_menu/Fight_Button.png" alt="Fight" class="fight-button-img">
+            <img src="./sprites/main_menu/Fight_icon.png" alt="Fight_icon" class="fight-icon">
+            <span class="fight-text" data-key="FIGHT">FIGHT</span>
+
+            <img src="./sprites/tutorial/hand_icon.png" alt="Hand icon" class="hand-icon" id="fight-button-hand-icon">
+        </div>
+
+        <div class="game-speed-panel" id="game-speed-panel">
+            <button class="game-speed-button" id="game-speed-button">
+                <img src="./sprites/main_menu/Speed_1X_Button.png" alt="Game speed" button class="game-speed-button-bg" id="game-speed-button-bg">
+                <span class="game-speed-text" id="game-speed-text" data-key="SPEED">SPEED</span>
+                <span class="game-speed-number-text" id="game-speed-number-text">1X</span>
+            </button>
+            <img src="./sprites/main_menu/Speed_1X_Icon.png" alt="Speed icon" button class="speed-icon" id="speed-icon">
+        </div>
+
+        <div class="heroes-button-panel" id="heroes-button-panel">
+            <button class="heroes-button" id="heroes-button">
+                <img src="./sprites/main_menu/heroes_button.png" alt="Heroes" button class="heroes-button-bg">
+                <span class="heroes-text" id="heroes-text" data-key="HEROES">HEROES</span>
+            </button>
+            <img src="./sprites/main_menu/heroes_icon.png" alt="Heroes card" button class="card-icon">
+        </div>
+    </div>
+
+    <div class="free-coin" id="free-coin">
+        <button class="free-coin-button" id="free-coin-button">
+            <img src="./sprites/main_menu/chest_button.png" alt="Heroes" button class="free-coin-button-bg" id="chest-icon">
+            <!-- <span class="free-coin-remaining-time-text" id="free-coin-remaining-time-text">01:59</span> -->
+        </button>
+        <img src="./sprites/main_menu/chest.png" alt="Free coin chest" class="free-coin-chest" id="free-coin-chest">
+        <span class="free-coin-remaining-time-text" id="free-coin-remaining-time-text">01:59</span>
+    </div>
+
+    <div class="enemy-health-bar" id="enemy-health-bar">
+        <img src="./sprites/main_menu/red_progress_back.png" alt="Enemy health icon" class="enemy-health-bar-bg">
+        <img src="./sprites/main_menu/red_progress_full.png" alt="Enemy health icon" class="enemy-health-bar-full" id="enemy-health-bar-full">
+        <img src="./sprites/main_menu/red_health.png" alt="Enemy health icon" class="enemy-health-icon">
+    </div>
+
+    <div class="player-health-bar" id="player-health-bar">
+        <img src="./sprites/main_menu/green_progress_back.png" alt="Player health icon" class="player-health-bar-bg">
+        <img src="./sprites/main_menu/green_progress_full.png" alt="player health icon" class="player-health-bar-full" id="player-health-bar-full">
+        <img src="./sprites/main_menu/green_health.png" alt="Player health icon" class="player-health-icon">
+    </div>
+
+
+    <div class="level-container">
+        <div class="level-indicator">
+          <div class="map-info">
+            <img src="./sprites/main_menu/AZTEC.png" alt="Forest" class="map-icon" id="current-map-icon">
+            <img src="./sprites/main_menu/circle_frame_green.png" alt="Current map frame" class="map-icon">
+            <span class="map-name-text" id="current-map-text">FOREST</span>
+            <!-- <p>FOREST</p> -->
+          </div>
+          <div class="level-text" id="level-text">LEVEL 32</div>
+          <div class="map-info">
+            <img src="./sprites/main_menu/DESERT.png" alt="Dune" class="map-icon" id="next-map-icon">
+            <img src="./sprites/main_menu/circle_frame_white.png" alt="Current map frame" class="map-icon">
+            <span class="map-name-text-next" id="next-map-text">DESERT</span>
+            <!-- <p>DUNE</p> -->
+          </div>
+        </div>
+        <div class="circle-container">
+          <div class="circle" id="level-circle-1"></div>
+          <div class="circle" id="level-circle-2"></div>
+          <div class="circle" id="level-circle-3"></div>
+          <div class="circle" id="level-circle-4"></div>
+          <div class="circle" id="level-circle-5"></div>
+          <div class="circle" id="level-circle-6"></div>
+          <div class="circle" id="level-circle-7"></div>
+          <div class="circle" id="level-circle-8"></div>
+          <div class="circle" id="level-circle-9"></div>
+          <div class="circle" id="level-circle-10"></div>
+        </div>
+    </div>
+    
+</div>
+
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+<div class="free-coin-animated"><img src="./sprites/main_menu/coin.png" class="free-coin-animated-img" alt="Free coin"></div>
+
+
+<div class="rewarded-warning-panel" id="rewarded-warning-panel">
+    <div class="rewarded-bg">
+        <img src="./sprites/main_menu/Settings_Popup.png" alt="settings-bg-img" class="rewarded-coin-bg-img">
+        <span class="rewarded-coin-header-text" data-key="GETREWARD">REWARDED AD</span>
+        <button class="rewareded-coin-close-button" id="rewarded-warning-close-button" >
+            <img src="./sprites/main_menu/close.png" alt="Rewarded-coin-close-img">
+        </button>
+        
+        <img src="./sprites/main_menu/Shine.png" alt="rewarded-coin-shine-img" class="rewarded-warning-shine-img" id="rewarded-warning-shine-img">
+        <img src="./sprites/main_menu/ad_icon.png" alt="rewarded-warning-img" class="rewarded-warning-img" id="rewarded-warning-img">
+        <span class="rewarded-warning-description-text" id="rewarded-warning-description-text" data-key="RewardedWarningDescription">Watch ad to get reward</span>
+
+        <div class="rewarded-warning-button-container" id="rewarded-warning-button-container">
+            <button class="rewarded-coin-button" id="rewarded-warning-button"></button>
+            <img src="./sprites/main_menu/green_video_icon.png" alt="rewarded-coin-video-icon" class="rewarded-warning-video-icon" id="rewarded-warning-video-icon">
+            <span class="rewarded-warning-text" data-key="WATCH">WATCH</span>
+        </div>
+
+    </div>
+</div>
+
+
+<div class="rewarded-coin-panel" id="rewarded-coin-panel">
+    <div class="rewarded-bg">
+        <img src="./sprites/main_menu/Settings_Popup.png" alt="settings-bg-img" class="rewarded-coin-bg-img">
+        <span class="rewarded-coin-header-text" data-key="FREECOIN">FREE COIN</span>
+        <button class="rewareded-coin-close-button" id="rewarded-coin-close-button" >
+            <img src="./sprites/main_menu/close.png" alt="Rewarded-coin-close-img">
+        </button>
+        
+        <img src="./sprites/main_menu/Shine.png" alt="rewarded-coin-shine-img" class="rewarded-coin-shine-img" id="rewarded-coin-shine-img">
+        <img src="./sprites/main_menu/coin_2.png" alt="rewarded-coin-img" class="rewarded-coin-img" id="rewarded-coin-img">
+        <span class="rewarded-coin-amount-text" id="rewarded-coin-amount-text">+2k</span>
+
+        <div class="rewarded-coin-button-container" id="rewarded-coin-button-container">
+            <button class="rewarded-coin-button" id="rewarded-coin-button"></button>
+            <img src="./sprites/main_menu/green_video_icon.png" alt="rewarded-coin-video-icon" class="rewarded-coin-video-icon" id="rewarded-coin-video-icon">
+            <span class="rewarded-coin-text" data-key="FREECOIN">FREE COIN</span>
+        </div>
+
+    </div>
+</div>
+
+<div class="success-panel" id="success-panel">
+    <div class="success-panel-container">
+        <span class="success-header-text" data-key="SUCCESS">SUCCESS</span>
+        <span class="level-completion-bonus-text" data-key="LevelCompletionBonus">Level completion bonus</span>
+        <img src="./sprites/main_menu/Shine.png" alt="success-shine-img" class="success-shine-img" id="success-shine-img">
+        <img src="./sprites/main_menu/coin_2.png" alt="success-coin-img" class="success-coin-img" id="success-coin-img">
+        <span class="success-earned-coin-text" id="earned-coin-text-success">+3k</span>
+        
+        <div class="get-more-coin-container" id="get-more-coin-container-success">
+            <button class="get-more-coin-button" id="get-more-coin-button-success"></button>
+            <img src="./sprites/main_menu/green_video_icon.png" alt="get-more-coin-video-icon" class="get-more-coin-video-icon" id="get-more-coin-video-icon-success">
+            <span class="get-more-coin-text" data-key="GET3XCOIN">GET 3X COIN</span>
+        </div>
+
+        <button class="no-thanks-button" id="no-thanks-button-success">
+            <span class="no-thanks-text" id="no-thanks-text-success" data-key="NOTHANKS">NO THANKS</span>
+        </button>
+
+        <div class="continue-container" id="continue-container-success">
+            <button class="continue-button-success" id="continue-button-success"></button>
+            <span class="continue-text-success" id="continue-text-success" data-key="CONTINUE">CONTINUE</span>
+        </div>
+    </div>
+</div>
+
+<div class="fail-panel" id="fail-panel">
+    <div class="fail-panel-container">
+        <span class="fail-header-text" data-key="FAIL">FAIL</span>
+        <span class="level-completion-bonus-text" data-key="YourEarnings">Your earnings</span>
+        <img src="./sprites/main_menu/Shine.png" alt="fail-shine-img" class="fail-shine-img" id="fail-shine-img">
+        <img src="./sprites/main_menu/coin_2.png" alt="fail-coin-img" class="fail-coin-img" id="fail-coin-img">
+        <span class="success-earned-coin-text" id="earned-coin-text-fail">+1k</span>
+
+        <div class="get-more-coin-container" id="get-more-coin-container-fail">
+            <button class="get-more-coin-button" id="get-more-coin-button-fail"></button>
+            <img src="./sprites/main_menu/green_video_icon.png" alt="get-more-coin-video-icon" class="get-more-coin-video-icon" id="get-more-coin-video-icon-fail">
+            <span class="get-more-coin-text" data-key="GET3XCOIN">GET 3X COIN</span>
+        </div>
+
+        <button class="no-thanks-button" id="no-thanks-button-fail">
+            <span class="no-thanks-text" id="no-thanks-text-fail" data-key="NOTHANKS">NO THANKS</span>
+        </button>
+
+        <div class="continue-container" id="continue-container-fail">
+            <button class="continue-button-success" id="continue-button-fail"></button>
+            <span class="continue-text-success" id="continue-text-fail" data-key="CONTINUE">CONTINUE</span>
+        </div>
+    </div>
+</div>
+
+<div class="settings-panel" id="settings-panel">
+    <div class="settings-bg">
+        <img src="./sprites/main_menu/Settings_Popup.png" alt="settings-bg-img" class="settings-bg-img">
+        <span class="settings-header-text" data-key="Settings">Settings</span>
+        <button class="settings-close-button" id="settings-close-button" >
+            <img src="./sprites/main_menu/close.png" alt="Settings-close-img">
+        </button>
+        
+        <div class="music-panel" id="music-panel">
+            <img src="./sprites/main_menu/music_sound_text_back.png" alt="music-bg-img" class="music-bg-img">
+            <span class="music-text" data-key="MUSIC">MUSIC</span>
+            
+            <div class="music-toggle">
+                <button class="music-toggle-button" id="music-toggle-button">
+
+                </button>
+                <img src="./sprites/main_menu/ON.png" alt="music-toggle-img" class="music-toggle-img" id="music-toggle-img">
+            </div>
+        </div>
+
+        <div class="sound-panel" id="sound-panel">
+            <img src="./sprites/main_menu/music_sound_text_back.png" alt="sound-bg-img" class="sound-bg-img">
+            <span class="sound-text" data-key="SOUND">SOUND</span>
+
+            <div class="sound-toggle">
+                <button class="music-toggle-button" id="sound-toggle-button">
+                    
+                </button>
+                <img src="./sprites/main_menu/ON.png" alt="sound-toggle-img" class="sound-toggle-img" id="sound-toggle-img">
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="splash-screen" id="splash-screen">
+    <img src="./sprites/splash_screen/Merge_Heroes_Logo.png" class="splash-screen-logo" id="splash-screen-logo">
+    <img src="./sprites/splash_screen/loading_icon.png" class="loading-icon" id="loading-icon">
+    <span class="splash-loading-text" id="splash-loading-text" data-key="LOADING"> </span>
+</div>
+
+<div class="showing-ads-panel" id="showing-ads-panel">
+    <img src="./sprites/splash_screen/loading_icon.png" class="showing-ads-icon" id="showing-ads-icon">
+    <span class="showing-ads-text" data-key="SHOWINGADS">SHOWING ADS</span>
+</div>
+
+<div class="reward-received-panel" id="reward-received-panel">
+    <img src="./sprites/splash_screen/Merge_Heroes_Logo.png" class="reward-received-panel-logo">
+    <span class="reward-received-text" id="reward-received-text" data-key="REWARD_RECEIVED">REWARD RECEIVED</span>
+
+    <div class="continue-container-reward-received" id="continue-container-reward-received">
+        <button class="continue-button-reward-received" id="continue-button-reward-received"></button>
+        <span class="continue-text-reward-received" data-key="CONTINUE">CONTINUE</span>
+    </div>
+</div>
+</div>
+<!-- <div class="heroes-panel" id="heroes-panel">
+    <img src="./sprites/main_menu/Big_Popup.png" class="heroes-panel-container-bg" id="heroes-panel-container-bg">
+    <div class="heroes-panel-container">
+        <div class="character">
+            <img src="./sprites/heroes_panel/unlocked_characters/skeleton.png" alt="Character 1">
+            <p>Character 1</p>
+         </div>
+        <div class="character">
+            <img src="./sprites/heroes_panel/unlocked_characters/viking_1.png" alt="Character 2">
+            <p>Character 2</p>
+         </div>
+        <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/crystalmonster.png" alt="Character 3">
+             <p>Character 3</p>
+         </div>
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/bedouin_melee.png" alt="Character 4">
+             <p>Character 4</p>
+         </div>
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/darthvader.png" alt="Character 5">
+             <p>Character 5</p>
+         </div>
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/viking_2.png" alt="Character 6">
+             <p>Character 6</p>
+         </div>
+ 
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/skeleton.png" alt="Character 1">
+             <p>Character 1</p>
+         </div>
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/viking_1.png" alt="Character 2">
+             <p>Character 2</p>
+         </div>
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/crystalmonster.png" alt="Character 3">
+             <p>Character 3</p>
+         </div>
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/bedouin_melee.png" alt="Character 4">
+             <p>Character 4</p>
+         </div>
+         <div class="character">
+            <img src="./sprites/heroes_panel/unlocked_characters/darthvader.png" alt="Character 5">
+             <p>Character 5</p>
+         </div>
+         <div class="character">
+             <img src="./sprites/heroes_panel/unlocked_characters/viking_2.png" alt="Character 6">
+             <p>Character 6</p>
+         </div>
+     </div>
+ </div> -->
+ 
+
+<!--<img src="./sprites/healthBar.png" alt="Exit" class="exit-button" id="exit-Button">-->
+
+<!-- -->
+
+<!-- <script type="module" src="/src/sdkMain.js"></script> -->
+
+<!--<script type="module" src="src/MergeEffect.js"></script>-->
+<!-- <script type="module" src="src/Fireball.js"></script>
+<script type="module" src="src/FireballExplosion.js"></script>
+<script type="module" src="src/Settings.js"></script>
+<script type="module" src="src/LevelEnd.js"></script> -->
+</body>
+</html>
+<!-- <html> -->
+
+
+<!-- <style>
+    body {
+        margin: 0;
+    }
+</style> -->
+
+<!-- <script
+        async
+        src="https://unpkg.com/es-module-shims@1.6.3/dist/es-module-shims.js"
+></script> -->
+
+<!-- <script src="https://cdnjs.cloudflare.com/ajax/libs/tween.js/18.6.4/tween.umd.js"></script> -->
+
+
+<!--<script type="importmap">-->
+<!--  {-->
+<!--    "imports": {-->
+<!--      "three": "https://unpkg.com/three@0.150.1/build/three.module.js",-->
+<!--      "three/addons/": "https://unpkg.com/three@0.150.1/examples/jsm/"-->
+<!--    }-->
+<!--  }-->
+<!--</script>-->
+
+<!-- <body> -->

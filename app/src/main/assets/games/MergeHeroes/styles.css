@@ -1,0 +1,1910 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden; /* Kaydırma işlemini engeller */
+}
+
+body {
+    font-family: english_font, sans-serif;
+    /*font-family: Arial, sans-serif;*/
+    background-color: #f0f0f0;
+    position: relative;
+    /* height: 100vh;
+    width: 100vw; */
+    /* overflow: hidden; */
+    overscroll-behavior: none;
+}
+
+canvas {
+    touch-action: none; /* Dokunma hareketlerinin sayfayı kaydırmasını engeller */
+}
+
+/* img, span {
+    pointer-events: none;
+} */
+
+span {
+    pointer-events: none;
+}
+
+body, img, p, span {
+    -webkit-user-select: none;    /* Seçimi engelle (Safari, iOS) */
+    -moz-user-select: none;       /* Seçimi engelle (Firefox) */
+    -ms-user-select: none;        /* Seçimi engelle (Internet Explorer) */
+    user-select: none;            /* Seçimi engelle (Diğer tarayıcılar) */
+    
+    -webkit-touch-callout: none;  /* Uzun basma menüsünü devre dışı bırak */
+}
+
+
+
+/* html {
+    overflow: hidden;
+} */
+
+@font-face {
+    font-family: 'english_font';
+    /* src: url('fonts/Supercell-MagicRegular-en.ttf') format('opentype'); */
+    src: url('fonts/supercell-magic.ttf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'russian_font';
+    /* src: url('fonts/troika.otf') format('opentype'); */
+    src: url('fonts/supercell-magic.ttf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+.free-coin-animated {
+    position: absolute;
+    top: 50%;
+    right: 15%;
+    width: 3vw;
+    height: 3vw;
+    display: none;
+}
+.free-coin-animated-img {
+    position: absolute;
+    width: 3vw;
+    height: 3vw;
+}
+
+.showing-ads-panel {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: black;
+    opacity: 0.8;
+    /* background-image: url('./sprites/splash_screen/Merge_Heroes_splash_background.png'); */
+    display: block;
+    z-index: 1001;
+    display: none;
+}
+
+.showing-ads-icon {
+    /* background-color: yellow; */
+    position: absolute;
+    top: 50%;
+    left: 43%;
+    width: 4%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+    /* transform-origin: center; */
+    /* display: none; */
+}
+
+.showing-ads-text {
+    /* background-color: yellow; */
+    position: absolute;
+    top: 50%;
+    left: 56%;
+    width: 20vw;
+    height: 4vw;
+    font-size: 1.6vw;
+    font-family: english_font, serif;
+    color: white;
+
+    text-align: left;
+    justify-content: left;
+    align-items: center;
+    display: flex;
+
+    text-shadow:
+            0.15vw 0.15vw 0px #000000, /* sağ-alt köşeye */
+            -0.15vw 0.15vw 0px #000000, /* sol-alt köşeye */
+            0.15vw -0.15vw 0px #000000, /* sağ-üst köşeye */
+            -0.15vw -0.15vw 0px #000000; /* sol-üst köşeye */
+
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.reward-received-panel {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: url('./sprites/splash_screen/Merge_Heroes_splash_background.png');
+    display: none;
+    z-index: 10002;
+}
+
+.reward-received-panel-logo {
+    position: absolute;
+    top: 30%;
+    left: 50%;
+    width: 20%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+    transform-origin: center;
+    /* display: none; */
+}
+
+.reward-received-text {
+    /* background-color: yellow; */
+    position: absolute;
+    top: 57%;
+    left: 50%;
+    width: 20vw;
+    height: 4vw;
+    font-size: 1.6vw;
+    font-family: english_font, serif;
+    color: white;
+
+    text-align: center;
+    justify-content: center;
+    align-items: center;
+    display: flex;
+
+    text-shadow:
+            0.15vw 0.15vw 0px #000000, /* sağ-alt köşeye */
+            -0.15vw 0.15vw 0px #000000, /* sol-alt köşeye */
+            0.15vw -0.15vw 0px #000000, /* sağ-üst köşeye */
+            -0.15vw -0.15vw 0px #000000; /* sol-üst köşeye */
+
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.continue-container-reward-received {
+    position: absolute;
+    /*background-image: url("./sprites/main_menu/green_buy_button.png");*/
+    top: 80%;
+    left: 50%;
+    width: 20vw;
+    height: calc(20vw * 0.3);
+    /*background-color: black;*/
+    transform: translateX(-50%) translateY(-50%);
+    display: block;
+}
+
+.continue-button-reward-received {
+    position: absolute;
+    background-image: url("./sprites/main_menu/green_buy_button.png");
+    background-size: cover; /* Görüntüyü butona tam olarak sığdırır */
+    background-repeat: no-repeat; /* Görüntünün tekrarlanmamasını sağlar */
+    background-position: center; /* Görüntüyü ortalar */
+    background-color: transparent;
+    border: none;
+    top: 50%;
+    left: 50%;
+    width: 20vw;
+    height: calc(20vw * 0.3);
+    object-fit: contain;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.continue-text-reward-received {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    font-size: 1.4vw;
+    color: #1c4005;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.splash-screen {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-image: url('./sprites/splash_screen/Merge_Heroes_splash_background.png');
+    display: block;
+}
+
+.splash-screen-logo {
+    position: absolute;
+    top: 48%;
+    left: 50%;
+    width: 30%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+    transform-origin: center;
+    /* display: none; */
+}
+
+.loading-icon {
+    /* background-color: yellow; */
+    position: absolute;
+    bottom: 12.5%;
+    left: 46%;
+    width: 2%;
+    height: auto;
+    transform: translateX(-50%) translateY(-50%);
+    /* transform-origin: center; */
+    /* display: none; */
+}
+
+.splash-loading-text {
+    /* background-color: yellow; */
+    opacity: 0.65;
+    position: absolute;
+    bottom: 12.5%;
+    left: 52%;
+    width: 8vw;
+    height: 2vw;
+    font-size: 0.8vw;
+    font-family: english_font, serif;
+    color: white;
+
+    text-align: left;
+    display: flex;
+    justify-content: left;
+    align-items: center;
+
+    text-shadow:
+            0.15vw 0.15vw 0px #000000, /* sağ-alt köşeye */
+            -0.15vw 0.15vw 0px #000000, /* sol-alt köşeye */
+            0.15vw -0.15vw 0px #000000, /* sağ-üst köşeye */
+            -0.15vw -0.15vw 0px #000000; /* sol-üst köşeye */
+
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.main-menu {
+    width: 100vw;
+    height: auto;
+    color: transparent;
+    background-color: transparent;
+    border: none;
+    display: none;
+    /*transform: translateY(-50%) ;*/
+}
+
+.enemy-health-bar {
+    /* background-color: black; */
+    position: absolute;
+    top: 10%;
+    left: 25%;
+    width: 1.95vh;
+    height: 13.5vh;
+}
+
+.enemy-health-icon {
+    position: absolute;
+    top: 0%;
+    left: 50%;
+    width: 3.5vh;
+    height: 3.1vh;
+    transform: translateX(-50%) translateY(-50%);
+    /* display: none; */
+}
+
+.enemy-health-bar-bg {
+    position: absolute;
+    top: 0%;
+    left: 50%;
+    width: 1.95vh;
+    height: 13.5vh;
+    transform: translateX(-50%);
+}
+
+.enemy-health-bar-full {
+    position: absolute;
+    top: 2.5%;
+    left: 50%;
+    width: 1.35vh;
+    height: 12.75vh;
+    transform: translateX(-50%) scaleY(1);
+    transform-origin: top center;
+}
+
+.player-health-bar {
+    /* background-color: black; */
+    position: absolute;
+    bottom: 20%;
+    right: 22%;
+    width: 1.95vh;
+    height: 13.5vh;
+    transform: rotate(180deg);
+}
+
+.player-health-icon {
+    position: absolute;
+    top: 0%;
+    left: 50%;
+    width: 3.5vh;
+    height: 3.1vh;
+    transform: rotate(180deg) translateX(50%) translateY(50%);
+    /* display: none; */
+}
+
+.player-health-bar-bg {
+    position: absolute;
+    top: 0%;
+    left: 50%;
+    width: 1.95vh;
+    height: 13.5vh;
+    transform: translateX(-50%);
+}
+
+.player-health-bar-full {
+    position: absolute;
+    top: 2.5%;
+    left: 50%;
+    width: 1.35vh;
+    height: 12.75vh;
+    transform: translateX(-50%) scaleY(1);
+    transform-origin: top center;
+}
+
+/* Sol üstteki level text ve resim */
+.leaderboard-button-panel {
+    position: absolute;
+    top: 5vh;
+    left: 6vw;
+    /*width: auto;*/
+    width: 10vw;
+    height: 3vw;
+    /*height: 5vh;*/
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /*transform: translateX(-100%);*/
+}
+
+.leaderboard-button {
+    position: absolute;
+    width: 10vw;
+    height: 3vw;
+    background-color: transparent;
+    border: none;
+}
+
+.leaderboard-button-bg {
+    position: absolute;
+    width: 10vw;
+    height: 3vw;
+
+}
+
+.leaderboard-icon {
+    position: absolute;
+    top: 50%;
+    left: 5%;
+    width: 2vw;
+    height: 2vw;
+    transform: translateY(-50%);
+}
+
+.leaderboard-text {
+    /* background-color: yellow;
+    opacity: 0.5; */
+    position: absolute;
+    color: #f7adcf;
+    font-size: 1.1vw;
+    font-weight: bold;
+    text-align: left;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 70%;
+    height: 80%;
+    left: 25%;
+}
+
+/* Sol üstteki level text ve resim */
+.settings-button-panel {
+    position: absolute;
+    top: 14vh;
+    left: 8vw;
+    width: 3.3vw;
+    height: auto ;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: transparent;
+    border: none;
+    display: none;
+}
+
+.settings-button {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    border: none;
+    color: transparent;
+    display: none;
+}
+.settings-button:hover {
+    opacity: 0.9;
+}
+
+.settings-image{
+    width: 100%;
+    height: auto;
+    /* pointer-events: none; */
+    user-select: none;
+}
+
+.settings-panel {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /*background-color: black;*/
+    background-color: rgba(5, 6, 34, 0.7);
+    /*background-color: #050622;*/
+    /*opacity: 0.7;*/
+    display: none;
+}
+
+.settings-bg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 25vw;
+    height: calc(25vw * 0.82);;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.settings-bg-img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: 100%;
+    transform: translateX(-50%) translateY(-50%);
+    object-fit: contain;
+    box-sizing: border-box;
+}
+
+.settings-close-button {
+    position: fixed;
+    width: 10%;
+    height: auto;
+    top: 2.5%;
+    right: 2.5%;
+    /*transform: translateY(50%);*/
+    background-color: transparent;
+    border: none;
+}
+.settings-close-button:hover {
+    opacity: 0.9;
+}
+
+.settings-close-button img {
+    /*position: relative;*/
+    width: 100%;
+    height: 100%;
+}
+
+.settings-header-text {
+    position: absolute;
+    top: 6%;
+    left: 50%;
+    font-size: 1.4vw;
+    font-family: english_font, serif;
+
+    /* text-shadow:
+            0.2vw 0.2vw 4px #2a3894,
+            -0.2vw 0.2vw 4px #2a3894,
+            0.2vw -0.2vw 4px #2a3894,
+            -0.2vw -0.2vw 4px #2a3894; */
+
+    text-shadow:
+        0.2vw 0.2vw 4px #1b2460,
+        -0.2vw 0.2vw 4px #1b2460,
+        0.2vw -0.2vw 4px #1b2460,
+        -0.2vw -0.2vw 4px #1b2460;
+
+    /* text-shadow: 0.2vw 0.2vw 4px #000000; */
+    
+    color: white;
+    transform: translateX(-50%);
+}
+
+.music-panel {
+    position: absolute;
+    left: 50%;
+    top: 33%;
+    width: 18vw;
+    height: calc(18vw * 0.21);
+    transform: translateX(-50%);
+}
+
+.music-bg-img {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /*transform: translateX(-50%);*/
+}
+
+.music-text {
+    position: absolute;
+    left: 5%;
+    top: 50%;
+    font-size: 1vw;
+    font-family: english_font, serif;
+
+    text-shadow:
+            0.1vw 0.1vw 0px #2a3894, /* sağ-alt köşeye */
+            -0.1vw 0.1vw 0px #2a3894, /* sol-alt köşeye */
+            0.1vw -0.1vw 0px #2a3894, /* sağ-üst köşeye */
+            -0.1vw -0.1vw 0px #2a3894; /* sol-üst köşeye */
+
+    color: white;
+    transform: translateY(-50%);
+}
+
+.music-toggle {
+    position: absolute;
+    top: 50%;
+    right: 1%;
+    width: 7vw;
+    height: calc(7vw * 0.4);
+    transform: translateY(-50%);
+}
+
+.music-toggle-img {
+    position: absolute;
+    top: 50%;
+    right: 0;
+    width: 48%;
+    height: auto;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+}
+
+.music-toggle-button {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background-color: transparent;
+    border: none;
+}
+
+.sound-panel {
+    position: absolute;
+    left: 50%;
+    top: 63%;
+    width: 18vw;
+    height: calc(18vw * 0.21);
+    transform: translateX(-50%);
+}
+
+.sound-bg-img {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    /*transform: translateX(-50%);*/
+}
+
+.sound-text {
+    position: absolute;
+    left: 5%;
+    top: 50%;
+    font-size: 1vw;
+    font-family: english_font, serif;
+
+    text-shadow:
+            0.1vw 0.1vw 0px #2a3894, /* sağ-alt köşeye */
+            -0.1vw 0.1vw 0px #2a3894, /* sol-alt köşeye */
+            0.1vw -0.1vw 0px #2a3894, /* sağ-üst köşeye */
+            -0.1vw -0.1vw 0px #2a3894; /* sol-üst köşeye */
+
+    color: white;
+    transform: translateY(-50%);
+}
+
+.sound-toggle {
+    position: absolute;
+    top: 50%;
+    right: 1%;
+    width: 7vw;
+    height: calc(7vw * 0.4);
+    transform: translateY(-50%);
+}
+
+.sound-toggle-img {
+    position: absolute;
+    top: 50%;
+    right: 0%;
+    width: 48%;
+    height: auto;
+    transform: translateY(-50%);
+    pointer-events: none;
+    user-select: none;
+}
+
+/* Sağ üstteki coin paneli */
+.coin-panel {
+    position: absolute;
+    top: 5vh;
+    right: 6vw;
+    /*width: auto;*/
+    width: 12vw;
+    height: auto;
+    /*height: 5vh;*/
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /*transform: translateX(-100%);*/
+    /*object-fit: contain;*/
+}
+
+.coin-panel-bg {
+    /*position: absolute;*/
+    object-fit: contain;
+    /*transform: translateY(50%);*/
+    width: 12vw;
+    height: auto;
+}
+
+.coin-text {
+    position: absolute;  /* Metni resmin tam üzerine konumlandır */
+    color: #ffe9a1;
+    font-size: 1.2vw;
+    left: 5vw;
+    /*font-size: 2vh;*/
+    font-weight: bold;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 60%;
+    height: 80%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    user-select: none;
+}
+
+.coin-icon {
+    position: absolute;
+    width: 3vw;
+    height: auto;
+    left: 0;
+    transform: translateX(-50%);
+}
+
+.rewarded-coin-plus-button {
+    position: absolute;
+    background-image: url("./sprites/main_menu/Plus_button.png");
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+    width: 3vw;
+    height: calc(3vw);
+    right: 3.2vw;
+    transform: translateX(100%);
+    transition: transform 0.15s ease-in-out;
+}
+
+.rewarded-coin-plus-button:hover {
+    transform: translateX(100%) scale(1.05);
+}
+
+/* .buy-coin-icon {
+    position: absolute;
+    width: 3vw;
+    height: auto;
+    right: 3.2vw;
+    transform: translateX(100%);
+} */
+
+/*.soldier-ad-text {*/
+/*    position: absolute;*/
+/*    display: inline-block;*/
+/*    left: 45%;*/
+/*    !*left: 1.65vw;*!*/
+/*    !*left: 30px;*!*/
+/*    top: 50%;*/
+/*    width: auto; !* Doğal genişlik *!*/
+/*    height: auto; !* Doğal yükseklik *!*/
+/*    max-width: 15%; !* Parent genişliğinin %15'i kadar genişlik *!*/
+/*    max-height: 80%; !* Parent yüksekliğinin %15'i kadar yükseklik *!*/
+/*    object-fit: contain; !* İçeriği orantılı şekilde sığdır *!*/
+/*    transform: translateY(-50%); !* Dikeyde ortala *!*/
+/*    font-size: 1.1vw;*/
+/*    color: white;*/
+/*}*/
+
+.main-menu-top-shadow {
+    background-color: red;
+    position: absolute;
+    background-image: url("./sprites/main_menu/shadow.png");
+    top: 0%;
+    left: 0%;
+    width: 100vw;
+    height: 20vh;
+    /*background-color: rgba(5, 6, 34, 0.7);*/
+    /* transform: translateX(50%) translateY(60%); */
+    transform: translateX(50%) translateY(50%);
+    /*transform-origin: center bottom;*/
+    display: block;
+    transform: rotate(180deg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-color: transparent;
+    border: none;
+}
+
+.main-menu-bottom-shadow {
+    position: absolute;
+    background-image: url("./sprites/main_menu/shadow.png");
+    bottom: 0;
+    left: 50%;
+    width: 100%;
+    height: 50%;
+    /*background-color: rgba(5, 6, 34, 0.7);*/
+    transform: translateX(-50%) translateY(60%);
+    /*transform-origin: center bottom;*/
+    display: block;
+}
+
+/* Alt menüdeki butonlar */
+.bottom-menu {
+    position: absolute;
+    width: 40vw;
+    height: 15vh;
+    /*height: calc(40vw * 0.3);*/
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    /* display: flex;
+    align-items: center;
+    justify-content: space-around; */
+    /*background-color: rgba(5, 6, 34, 0.7);*/
+    /* background-color: red; */
+}
+
+.hand-icon {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 4.5vw;
+    height: calc(4.5vw * 0.87);
+    transform: translateX(-50%) translateY(-50%);
+    transform-origin: right bottom;
+    /* transform: rotate(5deg); */
+    pointer-events: none;
+    user-select: none;
+    display: none;
+}
+
+.range-menu-button {
+    /* background-color: purple; */
+    position: absolute;  /* Konteynerin relative olması gerek */
+    /* width: 30%;
+    height: auto; */
+    width: 10vw;
+    height: calc(10vw * 0.5);
+    left: 8%;
+    bottom: 30%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /*gap: 5px;*/
+    /*transform: translateX(-50%); !* Dikeyde ortala *!*/
+    /*transform: translateY(-50%);*/
+    /* flex-direction: column; */
+
+    transition: transform 0.2s ease-in-out;
+    /* background-color: yellow; */
+}
+.range-menu-button:hover {
+    transform: scale(1.05);
+}
+
+
+.melee-menu-button {
+    position: absolute;  /* Konteynerin relative olması gerek */
+    /*width: 34.35% !important;*/
+    width: 10vw;
+    height: calc(10vw * 0.5);
+    height: auto;
+    left: 36%;
+    bottom: 30%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    transition: transform 0.2s ease-in-out;
+    /* background-color: yellow; */
+}
+.melee-menu-button:hover {
+    transform: scale(1.05);
+}
+
+.fight-menu-button {
+    /* background-color: yellow; */
+    position: absolute;  /* Konteynerin relative olması gerek */
+    /* width: 34.35%; */
+    width: 11.394vw;
+    height: calc(5vw);
+    /*width: 34.35% !important;*/
+    /*height: 30%;*/
+    left: 64%;
+    bottom: 30%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* background-color: black; */
+}
+.fight-menu-button:hover {
+    opacity: 0.9;
+}
+
+.range-button, .melee-button, .fight-button, .ad-button {
+    cursor: pointer;
+    background-color: transparent;
+    border: none;
+}
+
+.range-button{
+    /* background-color: yellow; */
+    position: absolute;
+    width: 10vw;
+    height: calc(10vw * 0.5);
+}
+
+.range-button-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.melee-button{
+    /* background-color: yellow; */
+    position: absolute;
+    width: 10vw;
+    height: 5vw;
+}
+
+.melee-button-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;    
+}
+
+.fight-button {
+    /* background-color: black; */
+    width: 11.394vw;
+    height: calc(5vw);
+
+    position: absolute;
+    border: none;
+}
+
+.fight-button-img {
+    position: absolute;
+    width: 11.394vw;
+    height: calc(5vw);
+    pointer-events: none;
+    user-select: none;
+}
+
+.ad-button {
+    background-color: red;
+    color: white;
+    font-size: 12px;
+    padding: 5px 10px;
+}
+
+.menu-button img {
+    width: 100%;
+    height: 100%;
+}
+
+.melee-text {
+    position: absolute;  /* Metni resmin tam üzerine konumlandır */
+    bottom: 0%;
+    left: 62%;
+    color: #022f40;
+    font-family: english_font, serif;
+    font-size: 1vw;
+    font-weight: bold;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    user-select: none;
+    transform: translateX(-50%);
+}
+
+.range-text {
+    position: absolute;  /* Metni resmin tam üzerine konumlandır */
+    bottom: 0;
+    left: 62%;
+    color: #9a390e;
+    font-family: english_font, serif;
+    font-size: 1vw;
+    font-weight: bold;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+    user-select: none;
+    transform: translateX(-50%);
+}
+/*@media (max-width: 1000px) {*/
+/*    .range-text, .melee-text {*/
+/*        font-size: 10px; !* 500px'den küçük ekranlarda minimum 16px *!*/
+/*    }*/
+/*}*/
+
+.fight-text {
+    position: absolute;  /* Metni resmin tam üzerine konumlandır */
+    bottom: 0;
+    left: 75%;
+    color: #214b06;
+    font-family: english_font, serif;
+    /* font-size: 1.2vw; */
+    font-size: 1vw;
+    font-weight: bold;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    /* justify-content: center; */
+    align-items: center;
+    width: 60%;
+    height: 100%;
+    pointer-events: none;
+    user-select: none;
+    transform: translateX(-50%);
+}
+
+.range-icon {
+    position: absolute;
+    bottom: 50%;
+    left: 28%;
+    width: 20% !important;
+    height: auto !important;
+    transform: translateX(-50%) translateY(50%);
+    max-width: none;  /* Maksimum genişlik sınırlamasını kaldır */
+    max-height: none; /* Maksimum yükseklik sınırlamasını kaldır */
+    object-fit: contain; /* Görüntü orantılı şekilde sığsın */
+    display: block;  /* İmgelerin varsayılan satır içi davranışını devre dışı bırak */
+}
+
+.melee-icon {
+    position: absolute;
+    bottom: 50%;
+    left: 27%;
+    width: 20% !important;
+    height: auto !important;
+    transform: translateX(-50%) translateY(50%);
+    max-width: none;  /* Maksimum genişlik sınırlamasını kaldır */
+    max-height: none; /* Maksimum yükseklik sınırlamasını kaldır */
+    object-fit: contain; /* Görüntü orantılı şekilde sığsın */
+    display: block;  /* İmgelerin varsayılan satır içi davranışını devre dışı bırak */
+}
+
+
+.fight-icon {
+    position: absolute;
+    bottom: 50%;
+    left: 30%;
+    width: 20% !important;
+    height: auto !important;
+    transform: translateX(-50%) translateY(50%);
+    max-width: none;  /* Maksimum genişlik sınırlamasını kaldır */
+    max-height: none; /* Maksimum yükseklik sınırlamasını kaldır */
+    object-fit: contain; /* Görüntü orantılı şekilde sığsın */
+    display: block;  /* İmgelerin varsayılan satır içi davranışını devre dışı bırak */
+    pointer-events: none;
+    user-select: none;
+}
+
+.soldier-ads {
+    position: absolute;
+    display: none;
+    /*display: flex;*/
+    align-items: center;
+    justify-content: center;
+    /*margin-top: -55vh;*/
+    /* width: 30%;
+    height: 20%; */
+    width: 3.75vw;
+    height: 1.25vw;
+    top: 0;
+    right: 0;
+    /*top: 15%;*/
+    /*right: 20%;*/
+    transform-origin: top right;
+    background-color: transparent;
+    border: none;
+    /*object-fit: contain;*/
+    /*transform: translateX(50%) translateY(-50%);*/
+    pointer-events: none;
+    user-select: none;
+}
+
+.range-soldier-ads-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.range-soldier-upgrade-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.melee-soldier-upgrade-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.melee-soldier-ads-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.range-soldier-ads-bg {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}
+
+.soldier-ad-icon {
+    position: absolute;
+    display: inline-block;
+    left: 40%;
+    /*left: 0.4vw;*/
+    /*left: 7px;*/
+    top: 50%;
+    width: auto; /* Doğal genişlik */
+    height: auto; /* Doğal yükseklik */
+    max-width: 25%; /* Parent genişliğinin %15'i kadar genişlik */
+    max-height: 80%; /* Parent yüksekliğinin %15'i kadar yükseklik */
+    object-fit: contain; /* İçeriği orantılı şekilde sığdır */
+    transform: translateY(-50%); /* Dikeyde ortala */
+}
+
+.soldier-ad-text {
+    position: absolute;
+    display: inline-block;
+    left: 45%;
+    /*left: 1.65vw;*/
+    /*left: 30px;*/
+    /* top: 50%; */
+    top: 65%;
+    width: auto; /* Doğal genişlik */
+    height: auto; /* Doğal yükseklik */
+    max-width: 15%; /* Parent genişliğinin %15'i kadar genişlik */
+    max-height: 80%; /* Parent yüksekliğinin %15'i kadar yükseklik */
+    object-fit: contain; /* İçeriği orantılı şekilde sığdır */
+    transform: translateY(-50%); /* Dikeyde ortala */
+    font-size: 0.75vw;
+    color: white;
+}
+
+.soldier-ad-container {
+    /*position: absolute;*/
+    /*display: flex; !* İkon ve metni yan yana hizala *!*/
+    /*align-items: center; !* Dikeyde ortala *!*/
+    /*left: 8px; !* Sola hizala *!*/
+    /*top: 50%; !* Dikeyde ortala *!*/
+    /*transform: translateY(-50%); !* Yüksekliğin yarısı kadar yukarı kaydır *!*/
+}
+
+.soldier-upgrade {
+    position: absolute;
+    display: flex;
+    /*display: flex;*/
+    align-items: center;
+    justify-content: center;
+    /*margin-top: -55vh;*/
+    width: 3.75vw;
+    height: 1.25vw;
+    top: 0;
+    right: 0;
+    /*top: 15%;*/
+    /*right: 20%;*/
+    transform-origin: top right;
+    background-color: transparent;
+    border: none;
+    /*object-fit: contain;*/
+    /*transform: translateX(50%) translateY(-50%);*/
+    pointer-events: none;
+    user-select: none;
+}
+
+.soldier-upgrade-icon {
+    position: absolute;
+    display: inline-block;
+    left: 10%;
+    /*left: 0.4vw;*/
+    /*left: 7px;*/
+    top: 50%;
+    width: auto; /* Doğal genişlik */
+    height: auto; /* Doğal yükseklik */
+    max-width: 25%; /* Parent genişliğinin %15'i kadar genişlik */
+    max-height: 80%; /* Parent yüksekliğinin %15'i kadar yükseklik */
+    object-fit: contain; /* İçeriği orantılı şekilde sığdır */
+    transform: translateY(-50%); /* Dikeyde ortala */
+}
+
+.soldier-upgrade-text {
+    /* background-color: black; */
+    position: absolute;
+    display: inline-block;
+    left: 40%;
+    /*left: 1.65vw;*/
+    /*left: 30px;*/
+    /* top: 50%; */
+    top: 65%;
+    /* width: auto;
+    height: auto; */
+    width: 1.5vw;
+    height: 0.8vw;
+    /* max-width: 15%;
+    max-height: 80%; */
+    object-fit: contain; /* İçeriği orantılı şekilde sığdır */
+    transform: translateY(-50%); /* Dikeyde ortala */
+    /* font-size: 0.55vw; */
+    font-size: 0.6875vw;
+    color: white;
+    text-align: center;
+}
+
+.free-coin {
+    /* background-color: yellow; */
+    position: absolute;
+    bottom: 50vh;
+    right: 12vw;
+    /*width: auto;*/
+    width: 6vw;
+    height: 7vw;
+    /* height: auto; */
+    /*height: 5vh;*/
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    transform: translateX(-50%);
+    /*object-fit: contain;*/
+}
+
+.free-coin-button {
+    /* background-color: red; */
+    position: absolute;
+    left: 0;
+    width: 6vw;
+    height: 7vw;
+    /* height: auto; */
+    background-color: transparent;
+    border: none;
+    object-fit: contain;
+    transform: translateX(-50%) translateY(-50%);
+}
+.free-coin-button:hover {
+    opacity: 0.9; /* Hover efektini isteğe göre düzenle */
+}
+
+.free-coin-button-bg {
+    position: absolute;
+    width: 6vw;
+    height: auto;
+    background-color: transparent;
+    border: none;
+    object-fit: contain;
+    /* transform: translateY(-50%); */
+}
+
+.free-coin-chest {
+    position: absolute;
+    /* margin-top: 75%; */
+    top: 10%;
+    left: 50%;
+    /*width: 10%;*/
+    /*height: auto;*/
+    width:68%;
+    height: auto;
+    background-color: transparent;
+    border: none;
+    transform: translateX(-50%);
+    pointer-events: none;
+    user-select: none;
+}
+
+.free-coin-remaining-time-text {
+    /* background-color: red; */
+    position: absolute;
+    top: 65%;
+    left: 50%;
+    /* margin-top: 85%; */
+    font-size: 0.9vw;
+    font-family: english_font, serif;
+    font-weight: bold;
+    object-fit: contain;
+
+    color: #1f2464;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 80%;
+    height: 20%;
+    pointer-events: none;
+    user-select: none;
+    transform: translateX(-50%);
+}
+
+.heroes-button-panel {
+    /* background-color: red; */
+    position: absolute;
+    bottom: 30%;
+    left: -9%;
+    width: 6vw;
+    height: 6.6vw;
+    /* height: auto; */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* transform: translateX(50%); */
+    /*object-fit: contain;*/
+    transition: transform 0.15s ease-in-out;
+    display: block;
+}
+.heroes-button-panel:hover {
+    transform: scale(1.05);
+}
+
+.heroes-button {
+    position: absolute;
+    left: 0;
+    width: 6vw;
+    height: 6.6vw;
+    /* height: auto; */
+    background-color: transparent;
+    border: none;
+    object-fit: contain;
+    /* transform: translateX(-50%) translateY(-50%); */
+}
+.heroes-button:hover {
+    opacity: 0.9;
+}
+
+.heroes-button-bg {
+    position: absolute;
+    width: 6vw;
+    height: 6.6vw;
+    /* height: auto; */
+    background-color: transparent;
+    border: none;
+    object-fit: contain;
+    /*transform: translateX(-50%);*/
+    transform: translateX(-50%) translateY(-50%);
+
+    pointer-events: none;
+    user-select: none;
+}
+
+.card-icon {
+    position: absolute;
+    /* margin-top: 75%; */
+    top: 15%;
+    left: 50%;
+    /*width: 10%;*/
+    /*height: auto;*/
+    width: 45%;
+    height: auto;
+    background-color: transparent;
+    border: none;
+    transform: translateX(-50%);
+    
+    pointer-events: none;
+    user-select: none;
+}
+
+.heroes-text {
+    position: absolute;
+    top: 75%;
+    left: 50%;
+    /* margin-top: 85%; */
+    font-size: 0.9vw;
+    font-family: english_font, serif;
+    font-weight: bold;
+    object-fit: contain;
+
+    color: #7d159b;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+
+    transform: translateX(-50%) translateY(-50%);
+
+    pointer-events: none;
+    user-select: none;
+}
+
+
+.game-speed-panel {
+    /* background-color: black; */
+    position: absolute;
+    /* bottom: 15vh;
+    right: 20vw; */
+    bottom: 30%;
+    left: 95%;
+    width: 6vw;
+    height: 6.66vw;
+    /* height: auto; */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    /* transform: translateX(-50%); */
+    /*object-fit: contain;*/
+    flex-direction: column;
+    transition: transform 0.15s ease-in-out;
+}
+.game-speed-panel:hover {
+    transform: scale(1.05);
+}
+
+.game-speed-button {
+    position: absolute;
+    left: 0;
+    width: 6vw;
+    height: 6.66vw;
+    /* height: auto; */
+    background-color: transparent;
+    border: none;
+    object-fit: contain;
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.game-speed-button-bg {
+    position: absolute;
+    width: 6vw;
+    height: auto;
+    background-color: transparent;
+    border: none;
+    object-fit: contain;
+    /*transform: translateX(-50%);*/
+}
+
+.speed-icon {
+    /* background-color: red; */
+    position: absolute;
+    margin-top: 70%;
+    top: -30%;
+    left: 50%;
+    /*width: 10%;*/
+    /*height: auto;*/
+    width: 45%;
+    height: auto;
+    background-color: transparent;
+    border: none;
+    pointer-events: none;
+    user-select: none;
+    /* transform: translateX(-50%); */
+    transform: translateX(-50%) translateY(-50%);
+}
+
+.game-speed-text, .game-speed-number-text {
+    position: absolute;
+    top: 5%;
+    /*left: 50%;*/
+    /*margin-top: 85%;*/
+    /* font-size: 0.9vw; */
+    font-size: 0.8vw;
+    font-family: english_font, serif;
+    font-weight: bold;
+    object-fit: contain;
+
+    color: #754107;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.game-speed-text {
+    margin-top: 85%;
+    left: 50%;
+}
+
+.game-speed-number-text {
+    margin-top: 65%;
+    left: 68%;
+}
+
+.character-unlock-menu {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vw;
+    height: 100vh;
+    /*height: auto;*/
+    color: transparent;
+    background-color: transparent;
+    /*opacity: 0.7;*/
+    border: none;
+    transform: translateX(-50%) translateY(-50%);
+    display: none;
+}
+
+.character-unlock-continue-button {
+    position: absolute;
+    bottom: 15%;
+    left: 50%;
+    width: 15vw;
+    height: calc(15vw * 0.44);
+    background-color: transparent;
+    border: none;
+    transform: translateX(-50%) translateY(50%);
+    display: none;
+}
+.character-unlock-continue-button:hover {
+    opacity: 0.9; /* Hover efektini isteğe göre düzenle */
+}
+
+.character-unlock-continue-button-bg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 15vw;
+    height: calc(15vw * 0.44);
+    transform: translateX(-50%) translateY(-50%);
+    color: red;
+}
+
+.character-unlock-continue-text {
+    position: absolute;  /* Metni resmin tam üzerine konumlandır */
+    bottom: 50%;
+    left: 50%;
+    color: #214b06;
+    font-family: english_font, serif;
+    font-size: 1.2vw;
+    font-weight: bold;
+    text-align: center;
+    /* Flexbox ile dikey ve yatay merkezleme */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 10vw;
+    height: auto;
+    pointer-events: none;
+    user-select: none;
+    transform: translateX(-50%) translateY(50%);
+    object-fit: contain;
+}
+
+@media (max-width: 1100px) {
+    .enemy-health-bar {
+        top: 20%;
+        left: 12.5%;
+    }
+    
+    .player-health-bar {
+        bottom: 20%;
+        right: 10%;
+    }
+
+    .free-coin {
+        right: 6vw;
+    }
+}
+
+@media (max-width: 768px) and (pointer: coarse) {
+    .reward-received-panel-logo {
+        width: 60%;
+        height: auto;
+    }
+
+    .reward-received-text {
+        font-size: 4.8vw;
+    }
+
+    .continue-container-reward-received {
+        width: 40vw;
+        height: calc(40vw * 0.3);
+    }
+
+    .continue-button-reward-received {
+        width: 40vw;
+        height: calc(40vw * 0.3);
+    }
+    
+    .continue-text-reward-received {
+        font-size: 2.8vw;
+    }
+
+    .splash-loading-text {
+        font-size: 1.6vw;
+        bottom: 13.5%;
+    }
+
+    .splash-screen-logo {
+        position: absolute;
+        width: 50%;
+        height: auto;
+    }
+
+    .loading-icon {
+        position: absolute;
+        left: 44%;
+        width: 4%;
+        height: auto;
+    }
+
+    .hand-icon {
+        width: 9vw;
+        height: calc(9vw * 0.87);
+    }
+
+    .enemy-health-bar {
+        top: 25%;
+        left: 8%;
+        width: 1.3vh;
+        height: 9vh;
+    }
+    
+    .enemy-health-icon {
+        width: 1.75vh;
+        height: 1.65vh;
+    }
+    
+    .enemy-health-bar-bg {
+        width: 1.3vh;
+        height: 9vh;
+    }
+    
+    .enemy-health-bar-full {
+        width: 0.9vh;
+        height: 8.5vh;
+    }
+
+    .player-health-bar {
+        bottom: 35%;
+        right: 5%;
+        width: 1.3vh;
+        height: 9vh;
+    }
+    
+    .player-health-icon {
+        width: 1.75vh;
+        height: 1.65vh;
+    }
+    
+    .player-health-bar-bg {
+        width: 1.3vh;
+        height: 9vh;
+    }
+    
+    .player-health-bar-full {
+        width: 0.9vh;
+        height: 8.5vh;
+    }
+
+    .character-unlock-continue-button {
+        width: 40vw;
+        height: calc(40vw * 0.44);
+    }
+
+    .character-unlock-continue-button-bg {
+        width: 40vw;
+        height: calc(40vw * 0.44);
+    }
+
+    .character-unlock-continue-text {
+        font-size: 3.2vw;
+    }
+
+    .range-menu-button {
+        bottom: 40%;
+        left: 5%;
+        width: 20vw;
+        height: calc(10vw);
+    }
+
+    .melee-menu-button {
+        bottom: 40%;
+        width: 20vw;
+        height: calc(10vw);
+    }
+
+    .fight-menu-button {
+        bottom: 40%;
+        left: 67%;
+        width: 22.8vw;
+        height: calc(10vw);
+    }
+    
+    .range-text {
+        font-size: 2vw;
+    }
+    
+    .melee-text {
+        font-size: 2vw;
+    }
+    
+    .fight-text {
+        /* background-color: red; */
+        left: 80%;
+        font-size: 2vw;
+    }
+
+    .melee-button {
+        width: 20vw;
+        height: 10vw;
+    }
+    
+    .range-button {
+        width: 20vw;
+        height: 10vw;
+    }    
+    
+    .heroes-text {
+        font-size: 1.8vw;
+    }
+
+    .bottom-menu {
+        width: 80vw;
+        height: 25vh;
+        /*height: 15vh;*/
+    }
+
+    .fight-button {
+        width: 22.8vw;
+        height: calc(10vw);
+    }
+
+    .fight-icon {
+        width: 25% !important;
+        height: auto !important;
+    }
+
+    .fight-button-img {
+        width: 28vw;
+        height: calc(28vw * 0.44);
+    }
+
+    .heroes-button-panel {
+        /* background-color: red; */
+        bottom: 70%;
+        left: -10%;
+        width: 12vw;
+        height: 13.2vw;
+    }
+
+    .heroes-button {
+        width: 12vw;
+        height: 13.2vw;
+    }
+
+    .heroes-button-bg {
+        width: 12vw;
+        height: 13.2vw;
+    }
+
+    .free-coin {
+        /*bottom: 24vh;*/
+        width: 12vw;
+        height: 13vw;
+
+        bottom: 60vh;
+        right: 1vw;
+        /* transform: translateX(0); */
+
+        /* bottom: 55vh;
+        right: 6vw; */
+        /* right: -4vw; */
+        /* transform: translateX(-50%); */
+    }
+
+    .free-coin-chest {
+        top: 8%;
+    }
+
+    .free-coin-button {
+        width: 12vw;
+        height: 13vw;
+    }
+    .free-coin-button-bg {
+        width: 12vw;
+        height: 13vw;
+    }
+
+    .free-coin-remaining-time-text {
+        font-size: 1.8vw;
+        top: 67.5%;
+    }
+
+    .game-speed-panel {
+        width: 12vw;
+        height: 13.2vw;
+        bottom: 70%;
+        transform: translateX(0);
+    }
+
+    .game-speed-button {
+        width: 12vw;
+        height: 13.2vw;
+    }
+    .game-speed-button-bg {
+        width: 12vw;
+        height: 13.2vw;
+    }
+
+    .game-speed-text, .game-speed-number-text {
+        /* font-size: 1.8vw; */
+        font-size: 1.6vw;
+    }
+    
+    .leaderboard-button-panel {
+        /* background-color: red; */
+        top: 10vh;
+        width: 18vw;
+        height: 4.5vw;
+    }
+
+    .leaderboard-button {
+        width: 18vw;
+        height: 4.5vw;
+    }
+
+    .leaderboard-button-bg {
+        width: 18vw;
+        height: 4.5vw;
+    }
+    
+    .leaderboard-icon {
+        width: 3.6vw;
+        height: 3.6vw;
+    }
+    
+    .leaderboard-text {
+        font-size: 1.98vw;
+    }
+    
+    /* .level-text {
+        font-size: 2.2vw;
+    } */
+    
+    .coin-panel {
+        top: 10vh;
+        width: 18vw;
+        height: auto;
+    }
+    
+    .coin-text {
+        font-size: 1.8vw;
+        left: 8.5vw;
+    }
+
+    .coin-panel-bg {
+        width: 18vw;
+        height: auto;
+    }
+
+    .coin-icon {
+        width: 4.8vw;
+        height: auto;
+    }
+
+    .free-coin-animated {
+        width: 4.8vw;
+        height: 4.8vw;
+    }
+
+    .free-coin-animated-img {
+        width: 4.8vw;
+        height: 4.8vw;
+    }
+
+    .rewarded-coin-plus-button {
+        width: 4.8vw;
+        height: calc(4.8vw);
+    }
+
+    .settings-button-panel {
+        top: 14vh;
+        width: 4.85vw;
+        height: auto;
+        -webkit-appearance: none; /* Safari'deki varsayılan buton stilini sıfırlar */
+        appearance: none;
+    }
+    
+    .settings-bg {
+        /* background-color: yellow; */
+        width: 60vw;
+        height: calc(60vw * 0.82);
+        /* pointer-events: none;
+        user-select: none; */
+    }
+
+    .settings-header-text {
+        font-size: 3.36vw;
+    }
+
+    .music-panel {
+        /* background-color: yellow; */
+        width: 43.2vw;
+        height: calc(43.2vw * 0.21);
+    }
+    
+    .music-text {
+        font-size: 2.4vw;
+    }
+
+    .music-toggle {
+        width: 16.8vw;
+        height: calc(16.8vw * 0.4);
+    }
+
+    .sound-panel {
+        width: 43.2vw;
+        height: calc(43.2vw * 0.21);
+    }
+
+    .sound-text {
+        font-size: 2.4vw;
+    }
+
+    .sound-toggle {
+        width: 16.8vw;
+        height: calc(16.8vw * 0.4);
+    }
+
+    .soldier-upgrade {
+        width: 36%;
+        height: 24%;
+    }
+    
+    .soldier-ads {
+        width: 36%;
+        height: 24%;
+    }
+
+    .soldier-upgrade-text {
+        font-size: 1.2vw;
+    }
+    
+    .soldier-ad-text {
+        font-size: 1.2vw;
+    }
+}
