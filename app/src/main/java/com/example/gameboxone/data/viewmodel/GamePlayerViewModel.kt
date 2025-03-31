@@ -55,7 +55,7 @@ class GamePlayerViewModel @Inject constructor(
                 localGamePath = gamePath
                 
                 // 启动Web服务器
-                val port = webServerManager.startServer(gameDir)
+                val port = webServerManager.startServer(gamePath)
                 Log.d(TAG, "Web服务器启动成功，端口: $port")
                 
                 // 设置游戏URL - 修改为所需格式

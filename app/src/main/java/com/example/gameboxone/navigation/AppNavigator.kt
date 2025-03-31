@@ -39,12 +39,12 @@ class AppNavigator(private val navController: NavController) {
                 Log.d(TAG, "处理导航事件: NavigateToGameDetail id=${event.gameId}")
                 navController.navigate("gameDetail/${event.gameId}")
             }
-            is NavigationEvent.NavigateToGamePlayer -> {
-                Log.d(TAG, "处理导航事件: NavigateToGamePlayer id=${event.gameId}")
-                // 对路径进行URL编码
-                val encodedPath = java.net.URLEncoder.encode(event.localPath, "UTF-8")
-                navController.navigate("gamePlayer/${event.gameId}?path=$encodedPath")
-            }
+//            is NavigationEvent.NavigateToGamePlayer -> {
+//                Log.d(TAG, "处理导航事件: NavigateToGamePlayer id=${event.gameId}")
+//                // 对路径进行URL编码
+//                val encodedPath = java.net.URLEncoder.encode(event.localPath, "UTF-8")
+//                navController.navigate("gamePlayer/${event.gameId}?path=$encodedPath")
+//            }
             is NavigationEvent.PopBackStack -> handlePopBackStack()
             is NavigationEvent.NavigateUp -> {
                 Log.d(TAG, "处理导航事件: NavigateUp")

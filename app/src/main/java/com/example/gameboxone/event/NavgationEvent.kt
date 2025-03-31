@@ -27,8 +27,8 @@ sealed class NavigationEvent {
     /**
      * 导航到游戏播放器
      */
-    data class NavigateToGamePlayer(
-        val gameId: String?,
-        val localPath: String
-    ) : NavigationEvent()
+//    data class NavigateToGamePlayer(
+//        val gameId: String?,
+//        val localPath: String
+//    ) : NavigationEvent()
 }

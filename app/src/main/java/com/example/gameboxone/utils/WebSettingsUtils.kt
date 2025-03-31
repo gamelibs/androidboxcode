@@ -11,41 +11,49 @@ object WebSettingsUtils {
     fun setSettings(context: Context, webView: WebView) {
         val settings = webView.settings
 
-        // 基本设置
-        settings.javaScriptEnabled = true
-        settings.domStorageEnabled = true
-        settings.databaseEnabled = true
-//        settings.setAppCacheEnabled(true)
+        // 基础设置
+        settings.apply {
+            // 启用JavaScript
+            javaScriptEnabled = true
+            domStorageEnabled = true
+            databaseEnabled = true
 
-        // WebGL必要设置
-        settings.javaScriptCanOpenWindowsAutomatically = true
-        settings.allowFileAccess = true
-        settings.allowContentAccess = true
-        settings.allowFileAccessFromFileURLs = true
-        settings.allowUniversalAccessFromFileURLs = true
+            // WebGL支持
+            javaScriptCanOpenWindowsAutomatically = true
+            allowFileAccess = true
+            allowContentAccess = true
+            allowFileAccessFromFileURLs = true
+            allowUniversalAccessFromFileURLs = true
 
-        // 禁用地理位置API需要权限的提示
-        settings.setGeolocationEnabled(false)
+            // 缓存配置
+//            setAppCacheEnabled(false)  // 使用新的缓存API
+            cacheMode = WebSettings.LOAD_DEFAULT
 
-        // 硬件加速和渲染质量设置
-        settings.setRenderPriority(WebSettings.RenderPriority.HIGH)
+            // 编码
+            defaultTextEncodingName = "UTF-8"
 
-        // 混合内容处理
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-            settings.mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            // 其他优化
+            loadsImagesAutomatically = true
+            setSupportMultipleWindows(false)
+            loadWithOverviewMode = true
+            useWideViewPort = true
+
+            // 性能优化
+            setRenderPriority(WebSettings.RenderPriority.HIGH)
+            setEnableSmoothTransition(true)
+            
+            // 媒体播放支持
+            mediaPlaybackRequiresUserGesture = false
+            
+            // 设置存储路径
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            }
         }
 
-        // 特定于WebGL的优化
-        settings.mediaPlaybackRequiresUserGesture = false
+        // 调试模式
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
-
-        // User Agent设置 - 可选，但有助于兼容性
-        val originalUserAgent = settings.userAgentString
-        settings.userAgentString = originalUserAgent + " AndroidWebView/WebGL"
-
-        // 缓存设置 - 设为默认而不是NO_CACHE
-        settings.cacheMode = WebSettings.LOAD_DEFAULT
     }
 }

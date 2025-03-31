@@ -3,6 +3,7 @@ package com.example.gameboxone.data.viewmodel
 import android.util.Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
+import com.example.gameboxone.WebViewActivity
 import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.manager.ResourceManager
@@ -20,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import dagger.hilt.android.qualifiers.ApplicationContext
+import android.content.Context
 
 
 /**
@@ -33,6 +36,7 @@ class GameDetailViewModel @Inject constructor(
     eventManager: EventManager,
     private val messageService: MessageService,
     private val myGameManager: MyGameManager,
+    @ApplicationContext private val context: Context,  // 添加Context注入
     savedStateHandle: SavedStateHandle
 ) : GameViewModel(eventManager) {
 
@@ -220,12 +224,7 @@ class GameDetailViewModel @Inject constructor(
                     is GameResourceState.Available -> {
                         // 游戏资源已经可用，直接启动游戏
                         Log.d(TAG, "游戏资源准备完毕，启动游戏: ${game.name}")
-                        eventManager.emitNavigationEvent(
-                            NavigationEvent.NavigateToGamePlayer(
-                                gameId = game.id,
-                                localPath = resourceState.localPath
-                            )
-                        )
+                        WebViewActivity.start(context, resourceState.localPath)
                     }
 
                     is GameResourceState.LoadingFromBackup -> {
@@ -241,12 +240,7 @@ class GameDetailViewModel @Inject constructor(
                         // 使用MyGameManager安装游戏 - 包括资源提取和数据库操作
                         myGameManager.installGameFromBackup(game).onSuccess { localPath ->
                             // 加载成功，启动游戏
-                            eventManager.emitNavigationEvent(
-                                NavigationEvent.NavigateToGamePlayer(
-                                    gameId = game.id,
-                                    localPath = localPath
-                                )
-                            )
+                            WebViewActivity.start(context, localPath)
                         }.onFailure { error ->
                             // 加载失败，尝试网络下载
                             handleError("从备份目录加载失败: ${error.message}")
@@ -317,13 +311,8 @@ class GameDetailViewModel @Inject constructor(
                 myGameManager.installGameFromBackup(game).fold(
                     onSuccess = { localPath ->
                         Log.d(TAG, "从本地资源成功加载游戏: ${game.name}")
-                        // 成功加载，启动游戏
-                        eventManager.emitNavigationEvent(
-                            NavigationEvent.NavigateToGamePlayer(
-                                gameId = game.id,
-                                localPath = localPath
-                            )
-                        )
+                        // 成功加载，启动游戏，使用WebViewActivity
+                        WebViewActivity.start(context, localPath)
                         setState { copy(isLoading = false, loadingMessage = null) }
                     },
                     onFailure = { error ->

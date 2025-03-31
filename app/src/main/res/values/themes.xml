@@ -2,4 +2,11 @@
 <resources>
 
     <style name="Theme.Gameboxone" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <style name="horizontal_line">
+        <item name="android:layout_width">match_parent</item>  <!-- 或指定宽度，例如：100dp -->
+        <item name="android:layout_height">1dp</item>          <!-- 指定高度，通常为1dp或更小 -->
+        <item name="android:background">#CCCCCC</item>      <!-- 指定线条颜色，这里用浅灰色作为示例 -->
+    </style>
+
 </resources>

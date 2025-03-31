@@ -104,20 +104,53 @@ class WebServerManager @Inject constructor(
     }
 
     /**
-     * 启动本地Web服务器
-     * @param gameDir 游戏根目录
+     * 启动服务器 - 字符串路径版本
+     * @param gamePath 游戏路径
      * @return 服务器端口
      */
-    fun startServer(gameDir: File): Int {
+    fun startServer(gamePath: String): Int {
         if (isRunning.get()) {
             Log.d(TAG, "服务器已运行在端口: $currentPort")
             return currentPort
         }
 
+        // 正确构建游戏目录路径 - 从app_games目录获取
+        val gameDir = File(context.filesDir.parent, "app_games/$gamePath")
+        
+        // 详细日志记录
+        Log.d(TAG, "检查游戏目录: ${gameDir.absolutePath}")
+        
+        if (!gameDir.exists()) {
+            // 尝试直接使用完整路径
+            val altGameDir = File(gamePath)
+            if (altGameDir.exists()) {
+                Log.d(TAG, "使用完整路径找到游戏目录: ${altGameDir.absolutePath}")
+                return startServerWithDir(altGameDir)
+            }
+            
+            // 尝试查找其他可能的位置
+            val appGamesDir = File(context.filesDir.parent, "app_games")
+            if (appGamesDir.exists()) {
+                Log.d(TAG, "app_games目录存在，内容: ${appGamesDir.list()?.joinToString()}")
+            }
+            
+            Log.e(TAG, "游戏目录不存在: $gamePath")
+            throw IOException("游戏目录不存在: $gamePath")
+        }
+        
+        return startServerWithDir(gameDir)
+    }
+    
+    /**
+     * 使用File对象启动服务器
+     * @param gameDir 游戏目录
+     * @return 服务器端口
+     */
+    private fun startServerWithDir(gameDir: File): Int {
         val rootDir = gameDir.parentFile ?: throw IllegalArgumentException("无法获取游戏目录的父目录")
         this.rootDir = rootDir
         currentPort = findAvailablePort()
-
+        
         try {
             server = GameLocalServer(currentPort, rootDir)
             server?.start()
@@ -142,6 +175,30 @@ class WebServerManager @Inject constructor(
         } catch (e: Exception) {
             Log.e(TAG, "停止本地服务器失败", e)
         }
+    }
+
+    /**
+     * 获取完整的游戏URL
+     * @param gamePath 游戏相对路径
+     * @return 完整的本地服务器游戏URL
+     */
+    fun getGameUrl(gamePath: String): String? {
+        if (!isRunning.get()) {
+            Log.e(TAG, "服务器未运行，无法获取游戏URL")
+            return null
+        }
+
+        // 对游戏路径进行更精确的解析
+        val gameDir = File(gamePath)
+        val gameName = gameDir.name
+        
+        // 确保路径格式正确 (移除前导斜杠)
+        val formattedPath = gameName.trim('/')
+        
+        Log.d(TAG, "构建游戏URL，使用游戏名称: $formattedPath")
+
+        // 构建URL - 确保添加了相关参数
+        return "http://localhost:$currentPort/$formattedPath/index.html"
     }
 
     /**

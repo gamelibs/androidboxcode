@@ -15,7 +15,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.ui.screen.GameDetailScreen
 import androidx.compose.runtime.LaunchedEffect
-import com.example.gameboxone.ui.screen.GamePlayerScreen
 import java.net.URLDecoder
 import androidx.activity.compose.BackHandler
 import com.example.gameboxone.data.viewmodel.GameDetailViewModel
@@ -186,9 +185,7 @@ fun NavGraphBuilder.gamePlayerNavGraph() {
         val decodedPath = URLDecoder.decode(path, "UTF-8")
         
         Log.d(TAG, "导航到游戏播放页面: gameId=$gameId, path=$decodedPath")
-        
-        // 显示游戏播放界面
-        GamePlayerScreen(localGamePath = decodedPath)
+
     }
 }
 

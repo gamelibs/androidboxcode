@@ -67,6 +67,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name="com.example.gameboxone.WebViewActivity"
+            android:configChanges="orientation|keyboardHidden|screenSize"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
         <!-- 添加崩溃处理活动 -->
         <activity
             android:name=".ui.CrashHandlerActivity"
