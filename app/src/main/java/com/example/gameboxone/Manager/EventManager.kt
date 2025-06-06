@@ -1,25 +1,30 @@
 package com.example.gameboxone.manager
 
+import android.content.Context
 import android.util.Log
+import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.event.GameEvent
+
+import com.example.gameboxone.manager.SystemEvent
+import com.example.gameboxone.manager.ResourceEvent
 import com.example.gameboxone.navigation.NavigationEvent
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
-import javax.inject.Inject
-import javax.inject.Singleton
-import com.example.gameboxone.event.DataEvent
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.util.LinkedList
 import java.util.Queue
+import javax.inject.Inject
+import javax.inject.Singleton
+
 
 /**
  * 事件管理器
@@ -28,7 +33,11 @@ import java.util.Queue
  * 2. 游戏事件
  */
 @Singleton
-class EventManager @Inject constructor() {
+class EventManager @Inject constructor(
+    @ApplicationContext private val context: Context
+) {
+    // 添加协程作用域，替代viewModelScope
+    private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
 
     // 添加错误重试机制
     private suspend fun <T> withRetry(
@@ -82,6 +91,9 @@ class EventManager @Inject constructor() {
                 }
             }
         }
+        
+        // 自动注册游戏事件处理器
+        registerGameEventHandler()
     }
 
     /**
@@ -228,7 +240,66 @@ class EventManager @Inject constructor() {
             _dataEvents.emit(event)
         }
     }
+    
+    /**
+     * 处理游戏事件
+     * 移除对MyGameManager的直接依赖
+     */
+    fun handleGameEvent(event: GameEvent) {
+        coroutineScope.launch {
+            try {
+                when(event) {
+                    is GameEvent.GameStart -> {
+                        Log.d(TAG, "游戏开始: ${event.gameName}")
+                        // 不再调用MyGameManager方法
+                    }
+                    
+                    is GameEvent.GameEnd -> {
+                        Log.d(TAG, "游戏结束: ${event.gameName}")
+                        // 不再调用MyGameManager方法
+                    }
+                    
+                    is GameEvent.GameLaunched -> {
+                        Log.d(TAG, "游戏启动: ${event.gameData.name}")
+                        // 移除对MyGameManager的调用
+                    }
+                    
+                    else -> {
+                        // 处理其他类型的游戏事件
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "处理游戏事件失败", e)
+            }
+        }
+    }
+    
+    /**
+     * 注册事件监听并自动处理
+     */
+    fun registerGameEventHandler() {
+        coroutineScope.launch {
+            try {
+                gameEvents.collect { event ->
+                    handleGameEvent(event)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "游戏事件监听出错", e)
+                // 重新尝试注册
+                delay(1000)
+                registerGameEventHandler()
+            }
+        }
+    }
+    
+    /**
+     * 清理资源
+     */
+    fun cleanup() {
+        coroutineScope.cancel()
+    }
 }
+
 /**
  * 系统事件
  */

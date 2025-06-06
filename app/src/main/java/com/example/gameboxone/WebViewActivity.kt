@@ -21,6 +21,9 @@ import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
+import com.example.gameboxone.event.GameEvent
+import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.MyGameManager
 import com.example.gameboxone.manager.WebServerManager
 import com.example.gameboxone.utils.WebGLHelper
 import com.example.gameboxone.utils.WebSettingsUtils
@@ -40,11 +43,12 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     companion object {
         private const val KEY_GAME_PATH = "gamePath"
+        private const val KEY_GAME_ID = "gameId"  // 添加游戏ID参数
 
-        fun start(context: Context, gamePath: String) {
+        fun start(context: Context, gamePath: String, gameId: String) {
             val intent = Intent(context, WebViewActivity::class.java).apply {
                 putExtra(KEY_GAME_PATH, gamePath)
-                // 添加标志位，确保从新任务启动
+                putExtra(KEY_GAME_ID, gameId)  // 传递游戏ID
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
@@ -61,9 +65,16 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     private lateinit var webView: WebView
     private var gamePath: String? = null
     private var gameUrl: String? = null
+    private var gameId: String? = null  // 添加游戏ID字段
 
     @Inject
     lateinit var webServerManager: WebServerManager
+
+    @Inject
+    lateinit var eventManager: EventManager  // 添加事件管理器
+    
+    @Inject
+    lateinit var myGameManager: MyGameManager  // 添加游戏管理器
 
     // 添加错误处理和生命周期相关字段
     private var hasError = false
@@ -78,6 +89,8 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         
         // 获取游戏路径
         gamePath = intent.getStringExtra(KEY_GAME_PATH)
+        gameId = intent.getStringExtra(KEY_GAME_ID)
+        
         if (gamePath == null) {
             showError("没有提供游戏路径，无法启动游戏")
             return
@@ -87,6 +100,9 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         if (!validateGamePath()) {
             return
         }
+
+        // 记录游戏启动
+        recordGameStart()
 
         // 设置WebView并启动服务器
         setupWebView()
@@ -292,6 +308,23 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         }
     }
 
+    // 添加记录游戏启动的方法
+    private fun recordGameStart() {
+        gameId?.let { id ->
+            launch {
+                try {
+                    // 更新游戏播放信息
+                    myGameManager.updateGamePlayInfo(id)
+                    // 发送游戏启动事件
+                    val gameDir = File(gamePath!!)
+                    eventManager.emitGameEvent(GameEvent.GameStart(gameDir.name))
+                } catch (e: Exception) {
+                    Log.e(TAG, "记录游戏启动失败", e)
+                }
+            }
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         if (event.keyCode == KeyEvent.KEYCODE_BACK && event.action == KeyEvent.ACTION_UP) {
             goBack()
@@ -312,6 +345,19 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     override fun onDestroy() {
         isDestroyed = true
+        
+        // 记录游戏结束
+        gameId?.let { id ->
+            launch {
+                try {
+                    val gameDir = File(gamePath!!)
+                    eventManager.emitGameEvent(GameEvent.GameEnd(gameDir.name))
+                } catch (e: Exception) {
+                    Log.e(TAG, "发送游戏结束事件失败", e)
+                }
+            }
+        }
+        
         webView.apply {
             stopLoading()
             clearHistory()

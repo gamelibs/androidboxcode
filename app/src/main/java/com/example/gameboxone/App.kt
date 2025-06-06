@@ -6,6 +6,7 @@ import android.util.Log
 import android.widget.Toast
 import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.SdkManager
+import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.ui.CrashHandlerActivity
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -25,6 +26,9 @@ class App : Application(){
     @Inject
     lateinit var sdkManager: SdkManager
 
+    @Inject
+    lateinit var eventManager: EventManager
+
     companion object {
         private const val TAG = "App"
         private var instance: App? = null
@@ -39,6 +43,9 @@ class App : Application(){
     override fun onCreate() {
         super.onCreate()
         initializeApp()
+        
+        // 注册游戏事件处理器
+        eventManager.registerGameEventHandler()
     }
 
     private fun initializeApp() {
@@ -97,5 +104,8 @@ class App : Application(){
     override fun onTerminate() {
         super.onTerminate()
         applicationScope.cancel()
+        
+        // 清理资源
+        eventManager.cleanup()
     }
 }

@@ -44,14 +44,12 @@ object AppModule {
         return MessageService()
     }
     
-    /**
-     * 提供事件管理器实例
-     */
-    @Singleton
-    @Provides
-    fun provideEventManager(): EventManager {
-        return EventManager()
-    }
+    // 删除这个方法，因为EventManager已经有@Inject构造函数，会自动被Hilt处理
+    // @Singleton
+    // @Provides
+    // fun provideEventManager(): EventManager {
+    //     return EventManager()  // 这里缺少必要的参数
+    // }
     
     /**
      * 提供WebServer管理器实例

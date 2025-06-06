@@ -380,19 +380,6 @@ class MyGameManager @Inject constructor(
     }
 
     /**
-     * 更新游戏玩耍信息
-     * @param gameId 游戏ID
-     */
-    suspend fun updateGamePlayInfo(gameId: String) = withContext(Dispatchers.IO) {
-        try {
-            myGameDao.updatePlayInfo(gameId)
-            Log.d(TAG, "游戏玩耍信息更新成功: $gameId")
-        } catch (e: Exception) {
-            Log.e(TAG, "更新游戏玩耍信息失败: $gameId", e)
-        }
-    }
-
-    /**
      * 检查游戏是否有更新
      * @param gameId 游戏ID
      * @return 是否有更新
@@ -495,5 +482,82 @@ class MyGameManager @Inject constructor(
             size = config.size ?: "未知大小",
             installTime = System.currentTimeMillis()
         )
+    }
+
+    /**
+     * 安装游戏到我的游戏列表（适用于从首页直接玩游戏的场景）
+     */
+    suspend fun installGame(
+        gameId: String,
+        name: String,
+        icon: String,
+        gameRes: String,
+        description: String,
+        downloadUrl: String,
+        localPath: String,
+        patch: Int,
+        size: String
+    ): Boolean = withContext(Dispatchers.IO) {
+        try {
+            // 检查游戏是否已存在
+            if (isGameInstalled(gameId)) {
+                // 已安装，只更新播放信息
+                updateGamePlayInfo(gameId)
+                return@withContext true
+            }
+            
+            // 创建新的游戏记录
+            val myGame = MyGameItem(
+                gameId = gameId,
+                name = name,
+                icon = icon,
+                gameRes = gameRes,
+                description = description,
+                downloadUrl = downloadUrl,
+                localPath = localPath,
+                patch = patch,
+                size = size,
+                installTime = System.currentTimeMillis(),
+                lastPlayTime = System.currentTimeMillis(),
+                playCount = 1
+            )
+            
+            myGameDao.insert(myGame)
+            Log.d(TAG, "游戏添加成功: $name")
+            
+            // 发送游戏安装成功事件
+            eventManager.emitGameEvent(GameEvent.GameInstalled(gameId))
+            
+            return@withContext true
+        } catch (e: Exception) {
+            Log.e(TAG, "添加游戏到我的游戏失败: $name", e)
+            return@withContext false
+        }
+    }
+    
+    /**
+     * 更新游戏播放信息
+     * 更新最后播放时间和播放次数
+     */
+    suspend fun updateGamePlayInfo(gameId: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            val game = myGameDao.getGameById(gameId)
+            if (game != null) {
+                // 更新最后播放时间和播放次数
+                val updatedGame = game.copy(
+                    lastPlayTime = System.currentTimeMillis(),
+                    playCount = game.playCount + 1
+                )
+                myGameDao.update(updatedGame)
+                Log.d(TAG, "游戏播放信息更新成功: $gameId, 播放次数: ${updatedGame.playCount}")
+                return@withContext true
+            } else {
+                Log.w(TAG, "尝试更新不存在的游戏信息: $gameId")
+                return@withContext false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "更新游戏播放信息失败: $gameId", e)
+            return@withContext false
+        }
     }
 }

@@ -224,7 +224,7 @@ class GameDetailViewModel @Inject constructor(
                     is GameResourceState.Available -> {
                         // 游戏资源已经可用，直接启动游戏
                         Log.d(TAG, "游戏资源准备完毕，启动游戏: ${game.name}")
-                        WebViewActivity.start(context, resourceState.localPath)
+                        WebViewActivity.start(context, resourceState.localPath, game.id)
                     }
 
                     is GameResourceState.LoadingFromBackup -> {
@@ -240,7 +240,7 @@ class GameDetailViewModel @Inject constructor(
                         // 使用MyGameManager安装游戏 - 包括资源提取和数据库操作
                         myGameManager.installGameFromBackup(game).onSuccess { localPath ->
                             // 加载成功，启动游戏
-                            WebViewActivity.start(context, localPath)
+                            WebViewActivity.start(context, localPath, game.id)
                         }.onFailure { error ->
                             // 加载失败，尝试网络下载
                             handleError("从备份目录加载失败: ${error.message}")
@@ -312,7 +312,7 @@ class GameDetailViewModel @Inject constructor(
                     onSuccess = { localPath ->
                         Log.d(TAG, "从本地资源成功加载游戏: ${game.name}")
                         // 成功加载，启动游戏，使用WebViewActivity
-                        WebViewActivity.start(context, localPath)
+                        WebViewActivity.start(context, localPath, game.id)
                         setState { copy(isLoading = false, loadingMessage = null) }
                     },
                     onFailure = { error ->
