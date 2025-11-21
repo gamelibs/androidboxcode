@@ -1,6 +1,6 @@
 package com.example.gameboxone.ui.screen
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -229,7 +229,8 @@ private fun GameCard(
 
             // 获取图标文件
             val iconFile by produceState<File?>(initialValue = null, key1 = game.id) {
-                value = iconCacheManager.getGameIcon(game.id.toInt(), game.iconUrl,game.downloadUrl)
+                // Use downicon/downloadUrl as the source; iconUrl deprecated
+                value = iconCacheManager.getGameIcon(game.id.toInt(), "", game.downloadUrl)
             }
             // 游戏图标
             Box(

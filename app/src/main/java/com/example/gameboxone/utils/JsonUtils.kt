@@ -1,7 +1,7 @@
 package com.example.gameboxone.utils
 
 import android.content.Context
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.R
 import com.example.gameboxone.data.model.GameConfigItem
 import com.google.gson.Gson

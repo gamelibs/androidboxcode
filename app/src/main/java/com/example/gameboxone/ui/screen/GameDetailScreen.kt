@@ -1,6 +1,6 @@
 package com.example.gameboxone.ui.screen
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -198,6 +198,31 @@ private fun GameContent(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(text = "开始游戏")
+        }
+
+        // 任务描述和积分（若存在）
+        game.taskDesc?.let { desc ->
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(text = desc, style = MaterialTheme.typography.bodyLarge)
+        }
+
+        val points = game.taskPoints ?: emptyList()
+        if (points.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(16.dp))
+            // 只显示前四个任务点
+            val toShow = points.take(4)
+            Column(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                toShow.forEachIndexed { idx, value ->
+                    Text(
+                        text = "任务${idx + 1}：$value",
+                        style = MaterialTheme.typography.headlineMedium
+                    )
+                }
+            }
         }
     }
 }

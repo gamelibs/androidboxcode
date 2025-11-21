@@ -1,6 +1,6 @@
 package com.example.gameboxone.data.viewmodel
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.gameboxone.manager.DataManager

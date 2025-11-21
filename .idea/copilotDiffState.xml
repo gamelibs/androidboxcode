@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="CopilotDiffPersistence">
+    <option name="pendingDiffs">
+      <map>
+        <entry key="$PROJECT_DIR$/app/src/main/java/com/example/gameboxone/webview/GameInfoUIModule.kt">
+          <value>
+            <PendingDiffInfo>
+              <option name="filePath" value="$PROJECT_DIR$/app/src/main/java/com/example/gameboxone/webview/GameInfoUIModule.kt" />
+              <option name="originalContent" value="package com.example.gameboxone.webview&#10;&#10;/**&#10; * Minimal UI contract used by native &lt;-&gt; JS bridge (GameDataBridge et al).&#10; * Implementations should be defensive and only update visible UI components.&#10; */&#10;interface GameInfoUIModule {&#10;    /** Update a short textual game status (examples: &quot;true&quot;, &quot;victory&quot;, &quot;failed&quot;) */&#10;    fun updateGameStatus(status: String)&#10;&#10;    /** Update the visible game name/title */&#10;    fun updateGameName(name: String)&#10;&#10;    /** Update current level display */&#10;    fun updateLevel(level: String)&#10;&#10;    /** Update current score display (string form to avoid JSON/number parsing issues in bridge) */&#10;    fun updateScore(score: String)&#10;&#10;    /** Update a displayed game time / uptime string */&#10;    fun updateGameTime(time: String)&#10;&#10;    /** Handle ad-related events coming from JS; implementation may choose to ignore or log */&#10;    fun handleAdEvent(eventType: String, data: String)&#10;}&#10;" />
+              <option name="updatedContent" value="package com.example.gameboxone.webview&#10;&#10;/**&#10; * Minimal UI contract used by native &lt;-&gt; JS bridge (GameDataBridge et al).&#10; * Implementations should be defensive and only update visible UI components.&#10; */&#10;interface GameInfoUIModule {&#10;    /** Update a short textual game status (examples: &quot;true&quot;, &quot;victory&quot;, &quot;failed&quot;) */&#10;    fun updateGameStatus(status: String)&#10;&#10;    /** Update the visible game name/title */&#10;    fun updateGameName(name: String)&#10;&#10;    /** Update current level display */&#10;    fun updateLevel(level: String)&#10;&#10;    /** Update current score display (string form to avoid JSON/number parsing issues in bridge) */&#10;    fun updateScore(score: String)&#10;&#10;    /** Update a displayed game time / uptime string */&#10;    fun updateGameTime(time: String)&#10;&#10;    /** Handle ad-related events coming from JS; implementation may choose to ignore or log */&#10;    fun handleAdEvent(eventType: String, data: String)&#10;}" />
+            </PendingDiffInfo>
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

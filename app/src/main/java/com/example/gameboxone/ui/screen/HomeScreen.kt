@@ -152,7 +152,8 @@ private fun GameCard(
         ) {
             // 获取图标文件
             val iconFile by produceState<File?>(initialValue = null, key1 = game.id) {
-                value = iconCacheManager.getGameIcon(game.id, game.icon,game.downicon)
+                // New behavior: prefer cached gamesicon; if missing, download from config.downicon
+                value = iconCacheManager.getGameIcon(game.id, "", game.downicon)
             }
 
             // 图标容器 - 修改这里的尺寸使图标更大

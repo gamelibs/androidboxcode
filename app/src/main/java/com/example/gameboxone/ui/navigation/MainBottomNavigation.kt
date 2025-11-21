@@ -1,6 +1,6 @@
 package com.example.gameboxone.ui.navigation
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem

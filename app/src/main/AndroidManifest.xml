@@ -28,9 +28,9 @@
     <!-- 写入外部存储权限，仅适用于 API 32 及以下 -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <!-- 管理外部存储权限，用于高级文件访问 -->
-<!--    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"-->
-<!--        tools:ignore="ScopedStorage" />-->
+
+    <!-- 振动权限 -->
+    <uses-permission android:name="android.permission.VIBRATE" />
 
 
     <application
@@ -46,6 +46,14 @@
         android:usesCleartextTraffic="true"
         android:hardwareAccelerated="true"
         tools:targetApi="31">
+        <!-- AdMob 应用 ID 元数据 -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-1939303734521252~3944883708" />
+        <!-- WebView API for Ads integration flag -->
+        <meta-data
+            android:name="com.google.android.gms.ads.INTEGRATION_MANAGER"
+            android:value="webview" />
         <!-- 添加 WebView 渲染配置 -->
         <meta-data
             android:name="android.webkit.WebView.EnableSafeBrowsing"

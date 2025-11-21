@@ -1,6 +1,6 @@
 package com.example.gameboxone.data.viewmodel
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.gameboxone.WebViewActivity
@@ -277,23 +277,24 @@ class GameDetailViewModel @Inject constructor(
         Log.d(TAG, "游戏资源不存在，需要下载: ${game.name}")
         
         // 检查URL是否有效
-        if (game.downloadUrl.isBlank() || !game.downloadUrl.startsWith("http")) {
-            Log.w(TAG, "下载URL无效，尝试直接从本地资源获取: ${game.downloadUrl}")
+        // 如果下载地址为空，则直接尝试本地 assets
+        if (game.downloadUrl.isBlank()) {
+            Log.w(TAG, "下载URL为空，尝试直接从本地资源获取: ${game.downloadUrl}")
             tryLoadFromLocalAssets(game)
             return
         }
         
-        // 获取下载信息
-        val downloadInfo = resourceManager.getDownloadInfo(game.downloadUrl, game.gameRes)
-        
+        // 获取下载信息（避免与 state.downloadInfo 冲突，使用不同名称）
+        val resolvedInfo = resourceManager.resolveDownloadInfo(game.downloadUrl, game.gameRes)
+
         // 显示下载对话框
         setState {
             copy(
                 showDownloadDialog = true,
                 downloadInfo = Custom.DownloadInfo(
                     gameName = game.name,
-                    downloadUrl = downloadInfo.downloadUrl,
-                    targetPath = downloadInfo.targetPath
+                    downloadUrl = resolvedInfo.downloadUrl,
+                    targetPath = resolvedInfo.targetPath
                 )
             )
         }
@@ -368,54 +369,57 @@ class GameDetailViewModel @Inject constructor(
                     emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
                 }
 
-                // 检查URL是否有效，避免MalformedURLException
-                if (downloadInfo.downloadUrl.isBlank() || !downloadInfo.downloadUrl.startsWith("http")) {
-                    Log.w(TAG, "下载URL无效，尝试从本地资源获取: ${downloadInfo.downloadUrl}")
+                // 统一通过 ResourceManager.getDownloadInfo 获取解析后的URL和targetPath
+                val gameRes = state.value.game?.gameRes ?: ""
+                val resolvedInfo = resourceManager.resolveDownloadInfo(downloadInfo.downloadUrl, gameRes)
+
+                if (resolvedInfo.downloadUrl.isBlank() || !resolvedInfo.downloadUrl.startsWith("http")) {
+                    Log.w(TAG, "下载URL无效（解析后）: ${resolvedInfo.downloadUrl}，尝试从本地资源获取")
                     state.value.game?.let { tryLoadFromLocalAssets(it) }
                     return@launch
                 }
 
                 resourceManager.downloadAndInstallGame(
-                    downloadUrl = downloadInfo.downloadUrl,
-                    targetPath = downloadInfo.targetPath
+                    downloadUrl = resolvedInfo.downloadUrl,
+                    targetPath = resolvedInfo.targetPath
                 ) { progress ->
                     // 更新下载进度
                     setState { copy(downloadProgress = progress) }
                 }.fold(
-                    onSuccess = { localPath ->
-                        // 下载成功
-                        setState {
-                            copy(
-                                isDownloading = false,
-                                downloadProgress = 0f,
-                                loadingMessage = null
-                            )
-                        }
-                        
-                        // 发送完成事件
-                        state.value.game?.let { game ->
-                            emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
-                        }
-                        // 下载完成后再次尝试启动游戏
-                        launchGame()
-                    },
-                    onFailure = { error ->
-                        // 下载失败后尝试从本地资源获取
-                        Log.e(TAG, "游戏下载失败，尝试从本地资源获取", error)
-                        
-                        // 重置下载状态
-                        setState {
-                            copy(
-                                isDownloading = false,
-                                downloadProgress = 0f,
-                                loadingMessage = "尝试从本地资源获取游戏..."
-                            )
-                        }
-                        
-                        // 尝试从本地资源获取
-                        state.value.game?.let { tryLoadFromLocalAssets(it) }
-                    }
-                )
+                    onSuccess = { _ ->
+                         // 下载成功
+                         setState {
+                             copy(
+                                 isDownloading = false,
+                                 downloadProgress = 0f,
+                                 loadingMessage = null
+                             )
+                         }
+
+                         // 发送完成事件
+                         state.value.game?.let { game ->
+                             emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
+                         }
+                         // 下载完成后再次尝试启动游戏
+                         launchGame()
+                     },
+                     onFailure = { error ->
+                         // 下载失败后尝试从本地资源获取
+                         Log.e(TAG, "游戏下载失败，尝试从本地资源获取", error)
+
+                         // 重置下载状态
+                         setState {
+                             copy(
+                                 isDownloading = false,
+                                 downloadProgress = 0f,
+                                 loadingMessage = "尝试从本地资源获取游戏..."
+                             )
+                         }
+
+                         // 尝试从本地资源获取
+                         state.value.game?.let { tryLoadFromLocalAssets(it) }
+                     }
+                 )
             } catch (e: Exception) {
                 // 处理异常情况
                 Log.e(TAG, "下载过程出现异常，尝试从本地资源获取", e)

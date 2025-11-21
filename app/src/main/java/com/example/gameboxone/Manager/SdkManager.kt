@@ -1,7 +1,7 @@
 package com.example.gameboxone.manager
 
 import android.content.Context
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.service.MessageService

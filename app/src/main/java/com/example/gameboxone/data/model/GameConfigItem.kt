@@ -2,6 +2,7 @@ package com.example.gameboxone.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey
+import androidx.room.Ignore
 
 /**
  * 游戏数据实体类
@@ -28,5 +29,17 @@ data class GameConfigItem(
     val localPath: String = "",        // 本地存储路径
     val size: String = "",             // 游戏大小
     val categories: List<String> = emptyList(), // 游戏分类
-    val tags: List<String> = emptyList()        // 游戏标签
-)
+    val tags: List<String> = emptyList(),       // 游戏标签
+
+    // Persist task points as JSON string so Room can store it
+    val taskPointsJson: String? = null
+) {
+    // Task structure parsed from incoming JSON - ignored by Room but used by Gson
+    @Ignore
+    var task: Task? = null
+
+    data class Task(
+        val desc: String? = null,
+        val points: List<Int>? = null
+    )
+}

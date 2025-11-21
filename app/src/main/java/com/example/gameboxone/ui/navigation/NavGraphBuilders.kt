@@ -1,6 +1,6 @@
 package com.example.gameboxone.ui.navigation
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Person

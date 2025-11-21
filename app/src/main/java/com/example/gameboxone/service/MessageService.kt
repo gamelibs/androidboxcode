@@ -1,6 +1,6 @@
 package com.example.gameboxone.service
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.base.UiMessage
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow

@@ -76,6 +76,11 @@ dependencies {
     // Compose 导航
     implementation("androidx.navigation:navigation-compose:2.7.7")  // 导航组件
 
+    // Google 移动广告 SDK
+    implementation("com.google.android.gms:play-services-ads:23.1.0")
+    implementation("com.google.android.ump:user-messaging-platform:2.2.0")
+    implementation("androidx.lifecycle:lifecycle-process:2.8.3")
+
     // Android 测试依赖
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")

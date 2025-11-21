@@ -1,7 +1,7 @@
 package com.example.gameboxone.manager
 
 import android.content.Context
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.base.AppDatabase
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.data.model.Custom
@@ -227,7 +227,7 @@ class DataManager @Inject constructor(
     private suspend fun loadFallbackDataToDatabase() = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "尝试从assets加载保底数据")
-            
+
             // 尝试读取保底数据文件
             val jsonString = try {
                 context.assets.open("gameconfig.json")
@@ -239,28 +239,85 @@ class DataManager @Inject constructor(
                 return@withContext
             }
 
-            // 解析数据
+            // 解析数据：仅支持新格式 { "params": {...}, "gamelist": [ ... ] }
             val gson = Gson()
-            val type = object : TypeToken<List<GameConfigItem>>() {}.type
-            val configItems: List<GameConfigItem> = gson.fromJson(jsonString, type)
+            val rootObj = try {
+                gson.fromJson(jsonString, com.google.gson.JsonObject::class.java)
+            } catch (e: Exception) {
+                Log.e(TAG, "保底配置解析为 JSON 对象失败", e)
+                eventManager.emitDataEvent(DataEvent.Error("保底配置格式错误: ${e.message}"))
+                return@withContext
+            }
 
-            if (configItems.isEmpty()) {
+            if (rootObj == null) {
+                Log.e(TAG, "保底配置不是有效的 JSON 对象")
+                eventManager.emitDataEvent(DataEvent.Error("保底配置格式错误"))
+                return@withContext
+            }
+
+            // Apply params (env/betaUrl/resUrl/gameSdkUrl) so NetManager has correct BASE_URL for resources
+            try {
+                if (rootObj.has("params") && rootObj.get("params").isJsonObject) {
+                    val params = rootObj.getAsJsonObject("params")
+                    val env = params.getAsJsonPrimitive("env")?.asString
+                    val betaUrl = params.getAsJsonPrimitive("betaUrl")?.asString
+                    val resUrl = params.getAsJsonPrimitive("resUrl")?.asString
+                    val gameSdkUrl = params.getAsJsonPrimitive("gameSdkUrl")?.asString
+                    // apply to netManager
+                    netManager.applyRemoteParams(env, betaUrl, resUrl, gameSdkUrl)
+                    Log.d(TAG, "Applied remote params from fallback: env=$env, betaUrl=$betaUrl, resUrl=$resUrl, gameSdkUrl=$gameSdkUrl")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "应用 params 失败，继续解析 gamelist", e)
+            }
+
+            // 必须包含 params 和 gamelist
+            if (!rootObj.has("params") || !rootObj.has("gamelist")) {
+                Log.e(TAG, "保底配置缺少 params 或 gamelist 字段")
+                eventManager.emitDataEvent(DataEvent.Error("保底配置缺少 params 或 gamelist 字段"))
+                return@withContext
+            }
+
+            val listEl = try {
+                rootObj.getAsJsonArray("gamelist")
+            } catch (e: Exception) {
+                Log.e(TAG, "gamelist 字段不是数组", e)
+                eventManager.emitDataEvent(DataEvent.Error("保底配置 gamelist 格式错误"))
+                return@withContext
+            }
+
+            val type = object : TypeToken<List<GameConfigItem>>() {}.type
+            val parsedItems: List<GameConfigItem> = try {
+                gson.fromJson(listEl, type)
+            } catch (e: Exception) {
+                Log.e(TAG, "解析 gamelist 项失败", e)
+                eventManager.emitDataEvent(DataEvent.Error("保底 gamelist 解析失败: ${e.message}"))
+                return@withContext
+            }
+
+            if (parsedItems.isEmpty()) {
                 Log.w(TAG, "解析的保底数据为空")
                 eventManager.emitDataEvent(DataEvent.Error("保底数据为空"))
                 return@withContext
             }
-            
+
+            // 将 task 字段提取为 taskPointsJson，以便 Room 能持久化
+            val configItems = parsedItems.map { item ->
+                val taskJson = item.task?.points?.let { gson.toJson(it) }
+                item.copy(taskPointsJson = taskJson)
+            }
+
             // 清空旧数据
             database.gameConfigDao().deleteAll()
-            
-            // 直接使用数据库DAO保存数据
+
+            // 保存处理后的数据
             database.gameConfigDao().insertAll(configItems)
             Log.d(TAG, "保底数据加载成功: ${configItems.size} 个游戏")
-        } catch (e: Exception) {
-            Log.e(TAG, "加载保底数据失败", e)
-            eventManager.emitDataEvent(DataEvent.Error("无法加载游戏数据：${e.message}"))
-        }
-    }
+         } catch (e: Exception) {
+             Log.e(TAG, "加载保底数据失败", e)
+             eventManager.emitDataEvent(DataEvent.Error("无法加载游戏数据：${e.message}"))
+         }
+     }
 
     /**
      * 获取游戏配置数据缓存
@@ -418,6 +475,7 @@ class DataManager @Inject constructor(
         // 处理数据转换，确保字段匹配和非空约束
         val processedItems = configItems.map { item ->
             // 创建GameConfigItem对象，确保字段映射正确
+            val taskJson = item.task?.points?.let { Gson().toJson(it) }
             GameConfigItem(
                 id = item.id,
                 // 确保驼峰命名字段映射正确
@@ -439,6 +497,9 @@ class DataManager @Inject constructor(
                 // 关键部分：确保集合字段不为null
                 categories = item.categories,
                 tags = item.tags,
+
+                // Persist task points JSON
+                taskPointsJson = taskJson,
 
                 // 其他字段使用默认值
                 isLocal = false,
@@ -465,8 +526,12 @@ class DataManager @Inject constructor(
      * @return 游戏数据对象，未找到则返回null
      */
     fun getCachedGameData(id: String): Custom.HotGameData? {
-        return _gameConfigCache?.find { it.id.toString() == id || it.gameId == id }?.let { configItem ->
-            // 将GameConfigItem转换为Custom.GameData
+         return _gameConfigCache?.find { it.id.toString() == id || it.gameId == id }?.let { configItem ->
+             // 将GameConfigItem转换为Custom.GameData
+            val points = configItem.taskPointsJson?.let {
+                try { com.google.gson.Gson().fromJson(it, Array<Int>::class.java).toList() } catch (e: Exception) { null }
+            } ?: configItem.task?.points
+
             Custom.HotGameData(
                 id = configItem.id.toString(),
                 gameId = configItem.gameId,
@@ -477,12 +542,14 @@ class DataManager @Inject constructor(
                 downloadUrl = configItem.download,
                 isLocal = configItem.isLocal,
                 localPath = configItem.localPath,
-                rating = configItem.rating
+                rating = configItem.rating,
+                taskDesc = configItem.task?.desc,
+                taskPoints = points
             )
-        }?.also {
-            Log.d(TAG, "从缓存获取游戏数据: ${it.name}")
-        }
-    }
+         }?.also {
+             Log.d(TAG, "从缓存获取游戏数据: ${it.name}")
+         }
+     }
 
     /**
      * 根据ID获取游戏数据
@@ -503,6 +570,10 @@ class DataManager @Inject constructor(
             
             // 转换并返回找到的游戏数据
             return@withContext gameConfigItem?.let { configItem ->
+                val points = configItem.taskPointsJson?.let {
+                    try { com.google.gson.Gson().fromJson(it, Array<Int>::class.java).toList() } catch (ex: Exception) { null }
+                } ?: configItem.task?.points
+
                 Custom.HotGameData(
                     id = configItem.id.toString(),
                     gameId = configItem.gameId,
@@ -513,7 +584,9 @@ class DataManager @Inject constructor(
                     downloadUrl = configItem.download,
                     isLocal = configItem.isLocal,
                     localPath = configItem.localPath,
-                    rating = configItem.rating
+                    rating = configItem.rating,
+                    taskDesc = configItem.task?.desc,
+                    taskPoints = points
                 )
             }?.also {
                 Log.d(TAG, "从数据库获取游戏数据: ${it.name}")
@@ -525,77 +598,63 @@ class DataManager @Inject constructor(
     }
 
     /**
-     * 获取数据库中游戏的数量
-     * 用于检查数据是否存在
+     * 获取游戏数量
+     * @return 数据库中游戏的数量
      */
-    private suspend fun getGameCount(): Int = withContext(Dispatchers.IO) {
-        database.gameConfigDao().getCount()
-    }
+    private suspend fun getGameCount(): Int {
+         return withContext(Dispatchers.IO) {
+             try {
+                database.gameConfigDao().getCount()
+             } catch (e: Exception) {
+                 Log.e(TAG, "获取游戏数量失败", e)
+                 0
+             }
+         }
+     }
 
+    /**
+     * 清除游戏配置数据
+     * 从数据库和缓存中清除所有游戏配置数据
+     */
+    private suspend fun clearGameConfigData() {
+        withContext(Dispatchers.IO) {
+            try {
+                database.gameConfigDao().deleteAll()
+                Log.d(TAG, "游戏配置数据已清除")
+            } catch (e: Exception) {
+                Log.e(TAG, "清除游戏配置数据失败", e)
+            }
+        }
 
-    suspend fun clearGameConfigData() = withContext(Dispatchers.IO) {
-        try {
-            // 清空数据库中的游戏配置记录
-            database.gameConfigDao().deleteAll()
-
-            // 清空内存缓存
-            invalidateCache()
-        } catch (e: Exception) {
-            Log.e(TAG, "清除游戏配置数据失败", e)
-            throw e
+        // 清空缓存
+        cacheLock.withLock {
+            _gameConfigCache = null
+            lastCacheTime = 0
         }
     }
 
     /**
-     * 检查缓存是否过期
+     * 更新配置缓存
+     * 从数据库加载最新的游戏配置数据到缓存
      */
-    private fun isCacheExpired(): Boolean {
-        return System.currentTimeMillis() - lastCacheTime > CACHE_VALID_TIME
-    }
-
-    /**
-     * 使缓存失效
-     */
-    private fun invalidateCache() {
-        CoroutineScope(Dispatchers.IO).launch {
-            cacheLock.withLock {
-                _gameConfigCache = null
-                lastCacheTime = 0
-                Log.d(TAG, "游戏配置数据缓存已清除")
+    private suspend fun updateConfigCache() {
+        cacheLock.withLock {
+            try {
+                _gameConfigCache = database.gameConfigDao().getAll()
+                lastCacheTime = System.currentTimeMillis()
+                Log.d(TAG, "配置缓存已更新，当前缓存大小: ${_gameConfigCache?.size}")
+            } catch (e: Exception) {
+                Log.e(TAG, "更新配置缓存失败", e)
             }
         }
     }
 
     /**
-     * 强制更新缓冲
+     * 检查缓存是否过期
+     * @return 如果缓存过期返回true，否则返回false
      */
-    suspend private fun updateConfigCache(){
-        cacheLock.withLock {
-            _gameConfigCache = database.gameConfigDao().getAll()
-            lastCacheTime = System.currentTimeMillis()
-        }
-        Log.d(TAG, "游戏配置数据缓存已更新")
+    private fun isCacheExpired(): Boolean {
+        val currentTime = System.currentTimeMillis()
+        return (currentTime - lastCacheTime) > CACHE_VALID_TIME
     }
-
-    /**
-     * 清除所有数据
-     * 谨慎使用，一般用于测试或重置应用
-     */
-    suspend fun clearAllData() = withContext(Dispatchers.IO) {
-        try {
-            database.gameConfigDao().deleteAll()
-            database.appConfigDao().deleteAll()
-
-            // 删除配置文件
-            File(configDir, "gameconfig.json").delete()
-
-            Log.d(TAG, "所有数据已清除")
-        } catch (e: Exception) {
-            Log.e(TAG, "清除数据失败", e)
-            throw e
-        }
-    }
-
-
-
 }

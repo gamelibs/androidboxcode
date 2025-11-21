@@ -23,7 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.material3.AlertDialog
 

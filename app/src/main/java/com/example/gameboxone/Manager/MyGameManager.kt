@@ -1,7 +1,7 @@
 package com.example.gameboxone.manager
 
 import android.content.Context
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.base.AppDatabase
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.model.GameConfigItem
@@ -184,8 +184,8 @@ class MyGameManager @Inject constructor(
             if (game.downloadUrl.isNotBlank() && game.downloadUrl.startsWith("http")) {
                 try {
                     Log.d(TAG, "尝试从网络下载游戏: ${game.name}")
-                    val downloadInfo = resourceManager.getDownloadInfo(game.downloadUrl, game.gameRes)
-                    
+                    val downloadInfo = resourceManager.resolveDownloadInfo(game.downloadUrl, game.gameRes)
+
                     val downloadResult = resourceManager.downloadAndInstallGame(
                         downloadUrl = downloadInfo.downloadUrl,
                         targetPath = downloadInfo.targetPath,

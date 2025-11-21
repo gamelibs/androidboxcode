@@ -1,7 +1,7 @@
 package com.example.gameboxone.utils
 
 import android.content.Context
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import android.webkit.WebView
 import java.io.File
 

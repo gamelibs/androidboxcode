@@ -1,6 +1,6 @@
 package com.example.gameboxone.navigation
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.navigation.NavController
 import com.example.gameboxone.ui.navigation.NavGraphBuilders
 import kotlinx.coroutines.flow.SharedFlow

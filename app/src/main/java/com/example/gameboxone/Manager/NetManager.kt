@@ -6,9 +6,11 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.data.model.GameConfigItem
 import com.google.gson.Gson
+import com.google.gson.JsonElement
+import com.google.gson.JsonObject
 import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -28,7 +30,6 @@ import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Request
 import kotlinx.coroutines.suspendCancellableCoroutine
-import okhttp3.internal.platform.Jdk9Platform.Companion.isAvailable
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 
@@ -56,28 +57,29 @@ class NetManager @Inject constructor(
      * @return 当前是否有可用网络连接
      */
     fun checkNetworkNow(): Boolean {
-        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val cm = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
 
-        // Android 6.0+ (API 23+)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val networkCapabilities = connectivityManager.activeNetwork ?: return false
-            val actNw = connectivityManager.getNetworkCapabilities(networkCapabilities) ?: return false
-            return when {
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> true
-                actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) -> true
-                else -> false
-            }
+        val isAvailable: Boolean = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            val network = cm.activeNetwork ?: return false.also { _isNetworkAvailable.set(false) }
+            val actNw = cm.getNetworkCapabilities(network) ?: return false.also { _isNetworkAvailable.set(false) }
+            actNw.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                    actNw.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                    actNw.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET)
         } else {
-            // 老版本Android
             @Suppress("DEPRECATION")
-            val networkInfo = connectivityManager.activeNetworkInfo
+            val networkInfo = cm.activeNetworkInfo
             @Suppress("DEPRECATION")
-            return networkInfo != null && networkInfo.isConnected
+            networkInfo != null && networkInfo.isConnected
         }
 
-        // 检测后更新缓存状态
+        // 更新缓存并记录日志
         _isNetworkAvailable.set(isAvailable)
+        if (isAvailable) {
+            Log.d(TAG, "Network check: available")
+        } else {
+            Log.d(TAG, "Network check: not available")
+        }
+
         return isAvailable
     }
 
@@ -159,7 +161,7 @@ class NetManager @Inject constructor(
             return@withContext Result.failure(IOException("网络不可用"))
         }
 
-        val url = "$BASE_URL/getGameIdInfo/$id"
+        val url = "${BASE_URL}/getGameIdInfo/$id"
         var attempt = 0
         var lastException: Exception? = null
 
@@ -247,7 +249,7 @@ class NetManager @Inject constructor(
                     .build()
 
                 val request = Request.Builder()
-                    .url(REMOTE_CONFIG_URL) // 使用 https://app.gameslog.top/gameconfig
+                    .url(REMOTE_CONFIG_URL) // 旧的配置文件URL（可能被动态覆盖）
                     .get()
                     .build()
 
@@ -286,10 +288,47 @@ class NetManager @Inject constructor(
                     }
                 }
 
-                // 解析JSON
-                val gameList = parseJson<List<GameConfigItem>>(response)
-                Log.d(TAG, "成功获取游戏列表: ${gameList.size} 个游戏")
-                return@withContext Result.success(gameList)
+                // 解析JSON - 仅支持新格式：{ "params": {...}, "gamelist": [ ... ] }
+                val gson = Gson()
+                val parsedList: List<GameConfigItem> = try {
+                    val jsonElement: JsonElement = gson.fromJson(response, JsonElement::class.java)
+
+                    if (!jsonElement.isJsonObject) {
+                        throw IOException("配置格式错误：顶层不是 JSON 对象")
+                    }
+
+                    val rootObj: JsonObject = jsonElement.asJsonObject
+
+                    // 必须存在 params
+                    val paramsObj = rootObj.getAsJsonObject("params")
+                        ?: throw IOException("配置中缺少 'params' 字段")
+
+                    val env = paramsObj.getAsJsonPrimitive("env")?.asString ?: ""
+                    val betaUrl = paramsObj.getAsJsonPrimitive("betaUrl")?.asString
+                    val resUrl = paramsObj.getAsJsonPrimitive("resUrl")?.asString
+                    val gameSdkUrl = paramsObj.getAsJsonPrimitive("gameSdkUrl")?.asString
+
+                    val chosenBase = if (env.lowercase().trim() == "beta") {
+                        betaUrl ?: resUrl ?: BASE_URL
+                    } else {
+                        resUrl ?: betaUrl ?: BASE_URL
+                    }
+
+                    updateBaseUrls(chosenBase, gameSdkUrl)
+
+                    // 必须存在 gamelist
+                    val listElement = rootObj.getAsJsonArray("gamelist")
+                        ?: throw IOException("配置中缺少 'gamelist' 字段或它不是数组")
+
+                    val type = object : TypeToken<List<GameConfigItem>>() {}.type
+                    gson.fromJson(listElement, type)
+                } catch (e: Exception) {
+                    Log.e(TAG, "解析游戏列表失败", e)
+                    throw e
+                }
+
+                Log.d(TAG, "成功获取游戏列表: ${parsedList.size} 个游戏")
+                return@withContext Result.success(parsedList)
 
             } catch (e: Exception) {
                 lastException = e
@@ -452,14 +491,63 @@ class NetManager @Inject constructor(
         }
     }
 
+    /**
+     * Apply params (env/betaUrl/resUrl/gameSdkUrl) coming from remote or local config
+     * This allows callers (e.g. DataManager when loading from assets fallback) to update base URLs
+     */
+    fun applyRemoteParams(env: String?, betaUrl: String?, resUrl: String?, gameSdkUrl: String?) {
+        try {
+            val chosenBase = if (env?.lowercase()?.trim() == "beta") {
+                betaUrl ?: resUrl ?: BASE_URL
+            } else {
+                resUrl ?: betaUrl ?: BASE_URL
+            }
+            updateBaseUrls(chosenBase, gameSdkUrl)
+        } catch (e: Exception) {
+            Log.e(TAG, "applyRemoteParams failed", e)
+        }
+    }
+
     companion object {
         private const val TAG = "NetManager"
-        private const val BASE_URL = "https://app.gameslog.top/"
-        private const val REMOTE_CONFIG_URL = "${BASE_URL}gameconfig"  // 修改为正确的配置文件URL
-        private const val SDK_URL = "${BASE_URL}sdk/sdk.min.js"
+        // 默认 base（当远程配置不可用时的回退）
+        private var BASE_URL: String = "http://192.168.1.168:15300"
+        // 远程配置地址，基于 base
+        private var REMOTE_CONFIG_URL: String = "${BASE_URL}/gameconfig"
+        // sdk 地址（会在解析远程配置后被覆盖）
+        @Volatile
+        private var SDK_URL: String = "${BASE_URL}/sdk/sdk.min.js"
         private const val TIMEOUT_MILLIS = 30_000L
         private const val MAX_RETRIES = 3
         private const val RETRY_DELAY_MILLIS = 1000L
+
+        // Update base urls dynamically when params provided by remote config
+        private fun updateBaseUrls(chosenBase: String?, gameSdkUrl: String?) {
+            if (!chosenBase.isNullOrBlank()) {
+                BASE_URL = chosenBase.trimEnd('/')
+                REMOTE_CONFIG_URL = "${BASE_URL}/gameconfig"
+            }
+            if (!gameSdkUrl.isNullOrBlank()) {
+                // if gameSdkUrl is absolute, use it; otherwise join with BASE_URL
+                SDK_URL = if (gameSdkUrl.startsWith("http")) gameSdkUrl else "${BASE_URL}/${gameSdkUrl.trimStart('/') }"
+            } else {
+                SDK_URL = "${BASE_URL}/sdk/sdk.min.js"
+            }
+            Log.d(TAG, "Updated BASE_URL=$BASE_URL, SDK_URL=$SDK_URL, REMOTE_CONFIG_URL=$REMOTE_CONFIG_URL")
+        }
+    }
+
+    /**
+     * 返回配置的 base url（不带末尾斜杠）
+     */
+    fun getBaseUrl(): String = BASE_URL
+
+    /**
+     * 将一个相对路径解析为完整资源 URL（会去掉起始的斜杠以防重复）
+     */
+    fun resolveResourceUrl(relativePath: String): String {
+        val path = relativePath.trimStart('/')
+        return "${BASE_URL}/$path"
     }
 }
 

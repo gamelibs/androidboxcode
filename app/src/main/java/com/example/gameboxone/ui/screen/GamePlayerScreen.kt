@@ -1,11 +1,10 @@
-
 package com.example.gameboxone.ui.screen
 
 
 import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.os.Build
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import android.view.View
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface

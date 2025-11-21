@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 继续游戏面板（旧的 continue 页面复制到这里，保留 id 以兼容 Activity） -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+       xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 顶部关闭按钮区域（靠右） -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <ImageButton
+            android:id="@+id/btn_close_overlay"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_margin="8dp"
+            android:layout_gravity="end"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="关闭"
+            tools:visibility="visible" />
+    </FrameLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginTop="80dp"
+        android:layout_gravity="center">
+
+        <TextView
+            android:id="@+id/overlay_title"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:padding="8dp"
+            android:text="继续游戏"
+            android:textColor="#FFD54F"
+            android:textSize="36sp" />
+
+        <TextView
+            android:id="@+id/overlay_task"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="任务: -"
+            android:textColor="#FFFFFF"
+            android:textSize="18sp"
+            android:layout_marginTop="12dp" />
+
+        <Button
+            android:id="@+id/btn_continue"
+            android:layout_width="220dp"
+            android:layout_height="48dp"
+            android:text="继续游戏"
+            android:layout_marginTop="28dp"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF" />
+    </LinearLayout>
+
+</merge>

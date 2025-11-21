@@ -14,45 +14,60 @@ object ModelConverter {
      * GameConfigItem 转 HotGameData
      */
     fun toHotGameData(item: GameConfigItem): Custom.HotGameData {
+        // parse task points from persisted JSON or transient task
+        val points = item.taskPointsJson?.let {
+            try { com.google.gson.Gson().fromJson(it, Array<Int>::class.java).toList() } catch (e: Exception) { null }
+        } ?: item.task?.points
+
         return Custom.HotGameData(
-            id = item.id.toString(),
-            gameId = item.gameId ?: item.id.toString(),
-            name = item.name,
-            iconUrl = item.icon,
-            gameRes = item.gameRes ?: "",
-            description = item.info ?: "暂无描述",
-            downloadUrl = item.download ?: "",
-            isLocal = item.isLocal,
-            localPath = item.localPath ?: "",
-            rating = item.rating,
-            patch = item.patch
-        )
-    }
-    
+             id = item.id.toString(),
+             gameId = item.gameId ?: item.id.toString(),
+             name = item.name,
+             iconUrl = item.icon,
+             gameRes = item.gameRes ?: "",
+             description = item.info ?: "暂无描述",
+             downloadUrl = item.download ?: "",
+             isLocal = item.isLocal,
+             localPath = item.localPath ?: "",
+             rating = item.rating,
+             patch = item.patch
+            ,
+            taskDesc = item.task?.desc,
+            taskPoints = points
+         )
+     }
+
     /**
      * MyGameItem 转 MyGameData
      */
     fun toMyGameData(item: GameConfigItem): Custom.MyGameData {
+        val points = item.taskPointsJson?.let {
+            try { com.google.gson.Gson().fromJson(it, Array<Int>::class.java).toList() } catch (e: Exception) { null }
+        } ?: item.task?.points
+
         return Custom.MyGameData(
-            id = item.gameId,
-            gameId = item.gameId,
-            name = item.name,
-            iconUrl = item.icon,
-            gameRes = item.gameRes,
-            description = item.info?:"暂无描述",
-            downloadUrl = item.download,
-            isLocal = true,
-            localPath = item.localPath,
-            rating = 0,
-            patch = item.patch,
-            size = item.size,
-            installTime = "",
-            lastPlayTime = "",
-            playCount = 0,
-            hasUpdate = false
-        )
-    }
-    
+             id = item.gameId,
+             gameId = item.gameId,
+             name = item.name,
+             iconUrl = item.icon,
+             gameRes = item.gameRes,
+             description = item.info?:"暂无描述",
+             downloadUrl = item.download,
+             isLocal = true,
+             localPath = item.localPath,
+             rating = 0,
+             patch = item.patch,
+             size = item.size,
+             installTime = "",
+             lastPlayTime = "",
+             playCount = 0,
+             hasUpdate = false
+            ,
+            taskDesc = item.task?.desc,
+            taskPoints = points
+         )
+     }
+
     /**
      * GameConfigItem 转 MyGameItem
      */

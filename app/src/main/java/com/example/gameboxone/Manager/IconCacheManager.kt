@@ -2,7 +2,7 @@ package com.example.gameboxone.manager
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import android.util.LruCache
 import com.example.gameboxone.R
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -46,7 +46,20 @@ class IconCacheManager @Inject constructor(
      */
     suspend fun getGameIcon(gameId: Int, iconUrl: String, downIconUrl: String? = null): File? = coroutineScope {
         try {
-            val iconFile = File(context.cacheDir, iconUrl)
+            // Ensure we save icons under the dedicated iconDir and use only the filename
+            // If `iconUrl` is empty (new config uses only `downicon`), derive filename from downIconUrl
+            val iconFileName = when {
+                iconUrl.isNotBlank() -> iconUrl.substringAfterLast('/')
+                !downIconUrl.isNullOrBlank() -> downIconUrl.substringAfterLast('/')
+                else -> null
+            }
+
+            if (iconFileName == null) {
+                Log.e(TAG, "无法确定图标文件名: iconUrl='$iconUrl', downIconUrl='$downIconUrl'")
+                return@coroutineScope null
+            }
+
+            val iconFile = File(iconDir, iconFileName)
             Log.d(TAG, "开始获取图标: $gameId, URL: $iconUrl, 文件路径: ${iconFile.absolutePath}")
 
             // 添加文件有效性检查
@@ -55,7 +68,7 @@ class IconCacheManager @Inject constructor(
                 return@coroutineScope iconFile
             }
 
-            // 尝试使用downIconUrl或转换iconUrl为完整URL
+            // 尝试使用 downIconUrl (优先), 或使用 iconUrl（可能为绝对或相对路径）
             val fullIconUrl = getValidIconUrl(iconUrl, downIconUrl)
             if (fullIconUrl == null) {
                 Log.e(TAG, "无效的图标URL: iconUrl=$iconUrl, downIconUrl=$downIconUrl")
@@ -71,7 +84,7 @@ class IconCacheManager @Inject constructor(
                     delay(200) // 等待200毫秒再检查
                     waitCount++
                 }
-                
+
                 if (iconFile.exists() && iconFile.length() > 0) {
                     Log.d(TAG, "等待下载完成后读取图标: $gameId")
                     activeDownloads.remove(fullIconUrl)
@@ -83,7 +96,7 @@ class IconCacheManager @Inject constructor(
                 // 下载图标
                 Log.d(TAG, "开始下载图标: $fullIconUrl")
                 val iconBytes = netManager.get(fullIconUrl)
-                
+
                 if (iconBytes.isEmpty()) {
                     Log.e(TAG, "下载的图标数据为空")
                     activeDownloads.remove(fullIconUrl)
@@ -92,11 +105,11 @@ class IconCacheManager @Inject constructor(
 
                 // 确保目录存在
                 iconFile.parentFile?.mkdirs()
-                
+
                 // 写入文件
                 iconFile.writeBytes(iconBytes)
                 Log.d(TAG, "图标已保存到: ${iconFile.absolutePath}, 大小: ${iconBytes.size}字节")
-                
+
                 activeDownloads.remove(fullIconUrl)
                 return@coroutineScope iconFile
             } catch (e: Exception) {
@@ -114,27 +127,32 @@ class IconCacheManager @Inject constructor(
      * 获取有效的图标URL，优先使用downIconUrl
      */
     private fun getValidIconUrl(iconUrl: String, downIconUrl: String?): String? {
-        // 首先检查downIconUrl是否可用
-        if (!downIconUrl.isNullOrBlank() && (downIconUrl.startsWith("http://") || downIconUrl.startsWith("https://"))) {
-            return downIconUrl
-        }
-        
-        // 如果iconUrl是完整URL，直接使用
-        if (iconUrl.startsWith("http://") || iconUrl.startsWith("https://")) {
-            return iconUrl
-        }
-        
-        // 如果iconUrl是相对路径，尝试转换为完整URL
-        // 这里假设相对路径应该基于某个基础URL
-        if (!iconUrl.isBlank()) {
-            // 根据URL格式判断应使用哪个基础URL
-            return when {
-                iconUrl.startsWith("gameIcon/") -> "https://app.gameslog.top/${iconUrl}"
-                iconUrl.startsWith("gamesicon/") -> "https://app.gameslog.top/${iconUrl}"
-                else -> "https://app.gameslog.top/downicon/${iconUrl.substringAfterLast("/")}"
+        // 优先使用 downIconUrl（若为绝对 URL 则直接使用，若为相对路径则使用 netManager.resolveResourceUrl）
+        val down = downIconUrl?.trim()
+        if (!down.isNullOrBlank()) {
+            val resolved = if (down.startsWith("http://") || down.startsWith("https://")) {
+                down
+            } else {
+                // 允许 downIconUrl 以或不以斜杠开头，例如 "downicon/MergeHeroes.png" 或 "/downicon/MergeHeroes.png"
+                netManager.resolveResourceUrl(down.trimStart('/'))
             }
+            Log.d(TAG, "Resolved icon URL from downIconUrl: $resolved (original='$down')")
+            return resolved
         }
-        
+
+        // 如果没有 downIconUrl，则检查 iconUrl（同样支持绝对或相对路径）
+        val icon = iconUrl.trim()
+        if (icon.isNotBlank()) {
+            val resolved = if (icon.startsWith("http://") || icon.startsWith("https://")) {
+                icon
+            } else {
+                netManager.resolveResourceUrl(icon.trimStart('/'))
+            }
+            Log.d(TAG, "Resolved icon URL from iconUrl: $resolved (original='$icon')")
+            return resolved
+        }
+
+        Log.w(TAG, "Both iconUrl and downIconUrl are blank after trimming: iconUrl='$iconUrl', downIconUrl='$downIconUrl'")
         return null
     }
 

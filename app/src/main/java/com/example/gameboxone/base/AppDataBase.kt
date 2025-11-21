@@ -11,7 +11,7 @@ import com.example.gameboxone.data.model.AppConfigItem
 import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.data.model.MyGameItem
 
-@Database(entities = [AppConfigItem::class, GameConfigItem::class, MyGameItem::class], version = 4)
+@Database(entities = [AppConfigItem::class, GameConfigItem::class, MyGameItem::class], version = 5)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun gameConfigDao(): GameConfigDao

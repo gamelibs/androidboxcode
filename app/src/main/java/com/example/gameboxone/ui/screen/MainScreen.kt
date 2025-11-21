@@ -1,6 +1,6 @@
 package com.example.gameboxone.ui.screen
 
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -188,7 +188,11 @@ fun MainScreen(
                                 )
                     }
                 ) {
-                    DefaultScreenContent("排行榜", "正在获取最新数据...")
+                    RankingScreen(
+                        onGameSelected = { game ->
+                            viewModel.navigateToGameDetail(game.id)
+                        }
+                    )
                 }
                 
                 // 设置（带动画）
@@ -209,7 +213,7 @@ fun MainScreen(
                                 )
                     }
                 ) {
-                    DefaultScreenContent("设置", "系统设置界面开发中...")
+                    SettingScreen()
                 }
                 
                 // 游戏详情页带动画
@@ -266,4 +270,3 @@ fun DefaultScreenContent(title: String, message: String) {
         }
     }
 }
-

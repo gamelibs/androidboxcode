@@ -73,7 +73,9 @@ sealed class Custom{
         var description: String,
         var downloadUrl: String,
         var isLocal: Boolean,
-        var localPath: String
+        var localPath: String,
+        var taskDesc: String? = null,
+        var taskPoints: List<Int>? = null
     )
 
     /**
@@ -95,7 +97,9 @@ sealed class Custom{
         var hasUpdate:Boolean,
         var installTime:String,
         var lastPlayTime:String,
-        var playCount:Int= 0
+        var playCount:Int= 0,
+        var taskDesc: String? = null,
+        var taskPoints: List<Int>? = null
     )
 
     companion object {

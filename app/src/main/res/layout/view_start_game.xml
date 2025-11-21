@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 开始游戏面板（显示任务得分与开始按钮） -->
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+       xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- 顶部关闭按钮区域（靠右） -->
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content">
+
+        <ImageButton
+            android:id="@+id/btn_close_overlay"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_margin="8dp"
+            android:layout_gravity="end"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:contentDescription="关闭"
+            tools:visibility="visible" />
+    </FrameLayout>
+
+    <!-- 中心内容：任务分 + 开始按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:gravity="center"
+        android:layout_marginTop="120dp"
+        android:layout_gravity="center">
+
+        <TextView
+            android:id="@+id/overlay_task"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="任务得分: +38"
+            android:textColor="#FFFFFF"
+            android:textSize="28sp"
+            android:layout_marginBottom="48dp" />
+
+        <Button
+            android:id="@+id/btn_continue"
+            android:layout_width="220dp"
+            android:layout_height="56dp"
+            android:text="开始游戏"
+            android:backgroundTint="#4CAF50"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp" />
+
+    </LinearLayout>
+
+</merge>

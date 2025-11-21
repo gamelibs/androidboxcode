@@ -1,7 +1,7 @@
 package com.example.gameboxone.data.local
 
 import android.content.Context
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import fi.iki.elonen.NanoHTTPD
 import java.io.IOException
 import java.io.InputStream

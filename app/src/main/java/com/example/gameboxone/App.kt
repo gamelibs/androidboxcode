@@ -2,7 +2,7 @@ package com.example.gameboxone
 
 import android.app.Application
 import android.content.Intent
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import android.widget.Toast
 import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.SdkManager
@@ -42,6 +42,7 @@ class App : Application(){
 
     override fun onCreate() {
         super.onCreate()
+
         initializeApp()
         
         // 注册游戏事件处理器

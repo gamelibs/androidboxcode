@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.res.AssetManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.annotation.DrawableRes
 
 import com.example.gameboxone.base.AppDatabase
@@ -86,14 +86,33 @@ class ResourceManager @Inject constructor(
                 return GameResourceState.LoadingFromBackup
             }
 
-            // 3. 如果都没有，且有有效的下载URL，需要从网络下载
-            if (game.downloadUrl.isNotBlank() && (game.downloadUrl.startsWith("http://") || game.downloadUrl.startsWith("https://"))) {
-                Log.d(TAG, "游戏资源不存在，将从网络下载: ${game.downloadUrl}")
-                return GameResourceState.NeedDownload(
-                    gameName = game.name,
-                    downloadUrl = game.downloadUrl,
-                    targetPath = getTargetDownloadPath(game.gameRes)
-                )
+            // 3. 如果都没有，但配置中提供了下载URL（可能是相对路径），尝试解析为完整URL后下载
+            if (game.downloadUrl.isNotBlank()) {
+                var resolvedUrl = game.downloadUrl
+
+                // 若为相对路径，使用 NetManager 的解析逻辑（基于已加载的 params）
+                if (!(resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://"))) {
+                    try {
+                        resolvedUrl = networkManager.resolveResourceUrl(resolvedUrl)
+                    } catch (e: Exception) {
+                        Log.w(TAG, "解析相对下载URL失败，尝试拼接base: ${game.downloadUrl}", e)
+                        resolvedUrl = ""
+                    }
+
+                    if (resolvedUrl.isBlank()) {
+                        val base = try { networkManager.getBaseUrl() } catch (e: Exception) { "" }
+                        if (base.isNotBlank()) resolvedUrl = "${base.trimEnd('/')}/${game.downloadUrl.trimStart('/')}"
+                    }
+                }
+
+                if (resolvedUrl.startsWith("http://") || resolvedUrl.startsWith("https://")) {
+                    Log.d(TAG, "游戏资源不存在，将从网络下载: $resolvedUrl")
+                    return GameResourceState.NeedDownload(
+                        gameName = game.name,
+                        downloadUrl = resolvedUrl,
+                        targetPath = getTargetDownloadPath(game.gameRes)
+                    )
+                }
             }
 
             // 4. URL无效且没有本地资源，返回错误
@@ -309,13 +328,32 @@ class ResourceManager @Inject constructor(
     }
 
     /**
-     * 获取下载信息
+     * 解析并返回下载信息（确保相对路径会被解析为完整URL）
+     * 返回类型为 project 中定义的 Custom.DownloadInfo
      */
-    fun getDownloadInfo(downloadUrl: String,gameRes: String): DownloadInfo {
-        return DownloadInfo(
-            downloadUrl = downloadUrl,
-            targetPath = getTargetDownloadPath(gameRes)
-        )
+    fun resolveDownloadInfo(downloadUrl: String, gameRes: String): Custom.DownloadInfo {
+        // 如果传入的是空字符串，保持为空以便上层决定是否从 assets 加载
+        if (downloadUrl.isBlank()) return Custom.DownloadInfo("", "", getTargetDownloadPath(gameRes))
+
+        // 如果已经是完整 URL，直接返回
+        if (downloadUrl.startsWith("http://") || downloadUrl.startsWith("https://")) {
+            return Custom.DownloadInfo("", downloadUrl, getTargetDownloadPath(gameRes))
+        }
+
+        // 否则将相对路径解析为完整 URL（使用 NetManager 提供的 BASE_URL）
+        var resolved = try {
+            networkManager.resolveResourceUrl(downloadUrl)
+        } catch (e: Exception) {
+            Log.w(TAG, "解析相对下载地址失败，返回原始地址: $downloadUrl", e)
+            ""
+        }
+
+        if (resolved.isBlank()) {
+            val base = try { networkManager.getBaseUrl() } catch (e: Exception) { "" }
+            if (base.isNotBlank()) resolved = "${base.trimEnd('/')}/${downloadUrl.trimStart('/')}"
+        }
+
+        return Custom.DownloadInfo("", resolved, getTargetDownloadPath(gameRes))
     }
 
     /**
@@ -607,14 +645,6 @@ class ResourceManager @Inject constructor(
     }
 
     /**
-     * 下载信息数据类
-     */
-    data class DownloadInfo(
-        val downloadUrl: String,
-        val targetPath: String
-    )
-
-    /**
      * 删除游戏文件
      * @param localPath 游戏本地路径
      */
@@ -699,20 +729,20 @@ class ResourceManager @Inject constructor(
     suspend fun loadFromBackupDirectory(game: Custom.HotGameData): Result<String> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "从备份目录加载游戏: ${game.name}")
-            
+
             // 获取目标路径
             val targetPath = getTargetDownloadPath(game.gameRes)
             val targetDir = File(targetPath)
-            
+
             // 确保目录存在
             targetDir.mkdirs()
-            
+
             // 尝试提取游戏从assets - 纯资源操作，不进行数据库更新
             val extractResult = extractGameFromAssetsEnhanced(
                 game = game,
                 targetPath = targetPath
             )
-            
+
             // 返回处理结果，由调用者处理数据库更新
             return@withContext extractResult
         } catch (e: Exception) {
@@ -735,37 +765,37 @@ class ResourceManager @Inject constructor(
             game.name.replace(" ", "_"),   // 基于名称(空格替换为下划线)
             game.name                      // 直接使用名称
         )
-        
+
         Log.d(TAG, "尝试提取游戏，检查可能的路径: $possiblePaths")
-        
+
         for (path in possiblePaths.filter { it.isNotBlank() }) {
             try {
                 // 检查目录格式资源
                 if (isGameInAssets(path)) {
                     Log.d(TAG, "找到游戏目录资源: games/$path")
-                    
+
                     // 从目录复制
                     copyGameFromAssets(path, File(targetPath))
                     File(targetPath, ".downloaded").createNewFile()
-                    
+
                     // 添加版本信息文件
                     saveVersionFile(targetPath, game.patch)
-                    
+
                     Log.d(TAG, "成功从assets目录提取游戏: ${game.name} 到 $targetPath")
                     return@withContext Result.success(targetPath)
                 }
-                
+
                 // 检查ZIP格式资源
                 val zipExists = context.assets.list("games")?.contains("$path.zip") == true
                 if (zipExists) {
                     Log.d(TAG, "找到游戏ZIP资源: games/$path.zip")
-                    
+
                     // 从ZIP提取
                     extractZipFromAssets("games/$path.zip", targetPath)
-                    
+
                     // 添加版本信息文件
                     saveVersionFile(targetPath, game.patch)
-                    
+
                     Log.d(TAG, "成功从assets ZIP提取游戏: ${game.name} 到 $targetPath")
                     return@withContext Result.success(targetPath)
                 }
@@ -774,7 +804,7 @@ class ResourceManager @Inject constructor(
                 // 继续尝试下一个路径
             }
         }
-        
+
         Log.e(TAG, "所有可能的资源路径都失败了")
         return@withContext Result.failure(Exception("未能找到有效的游戏资源"))
     }
@@ -786,7 +816,7 @@ class ResourceManager @Inject constructor(
         try {
             val versionFile = File(targetPath, ".version")
             versionFile.writeText(version.toString())
-            
+
             // 同时写入标准版本文件，增加兼容性
             val versionFile2 = File(targetPath, "version.txt")
             versionFile2.writeText(version.toString())
@@ -805,11 +835,11 @@ class ResourceManager @Inject constructor(
                 input.copyTo(output)
             }
         }
-        
+
         // 解压ZIP
         val targetDir = File(targetPath)
         targetDir.mkdirs()
-        
+
         var fileCount = 0
         ZipInputStream(tempFile.inputStream()).use { zip ->
             var entry = zip.nextEntry
@@ -829,13 +859,13 @@ class ResourceManager @Inject constructor(
                 entry = zip.nextEntry
             }
         }
-        
+
         // 添加下载完成标记
         File(targetPath, ".downloaded").createNewFile()
-        
+
         // 删除临时文件
         tempFile.delete()
-        
+
         Log.d(TAG, "从ZIP提取了 $fileCount 个文件")
     }
 
@@ -844,7 +874,7 @@ class ResourceManager @Inject constructor(
      */
     suspend fun extractGameFromAssets(
         gameId: String,
-        gameRes: String
+        gameRes: String,
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             // 创建一个模拟游戏对象用于资源提取
@@ -861,10 +891,10 @@ class ResourceManager @Inject constructor(
                 rating = 0,
                 patch = 1
             )
-            
+
             // 获取目标路径
             val targetPath = getTargetDownloadPath(gameRes)
-            
+
             return@withContext extractGameFromAssetsEnhanced(
                 game = game,
                 targetPath = targetPath
