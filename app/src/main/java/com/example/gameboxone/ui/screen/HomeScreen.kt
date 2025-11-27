@@ -47,7 +47,8 @@ fun HomeScreen(
             HomeTopBar(
                 isSyncing = uiState.isSyncing,
                 isLoading = uiState.isLoading,
-                onSyncClick = viewModel::syncGameConfig
+                onSyncClick = viewModel::syncGameConfig,
+                onSdkUpdateClick = viewModel::refreshSdkOnly
             )
         }
     ) { padding ->
@@ -109,11 +110,18 @@ private fun GameGrid(
 private fun HomeTopBar(
     isSyncing: Boolean,
     isLoading: Boolean,
-    onSyncClick: () -> Unit
+    onSyncClick: () -> Unit,
+    onSdkUpdateClick: () -> Unit
 ) {
     TopAppBar(
         title = { Text("游戏盒子") },
         actions = {
+            TextButton(
+                onClick = onSdkUpdateClick,
+                enabled = !isSyncing && !isLoading
+            ) {
+                Text("<=>")
+            }
             IconButton(
                 onClick = onSyncClick,
                 enabled = !isSyncing && !isLoading

@@ -22,7 +22,11 @@ sealed class UiMessage(
         override val id: String = UUID.randomUUID().toString(),
         val title: String,
         override val message: String,
-        val confirmAction: () -> Unit = {}
+        val confirmAction: () -> Unit = {},
+        // 是否可以通过点击外部/返回来取消对话
+        val cancelable: Boolean = true,
+        // 点击确认后是否自动关闭对话
+        val dismissOnConfirm: Boolean = true
     ) : UiMessage(id, message)
 
     /**

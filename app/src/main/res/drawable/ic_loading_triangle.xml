@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="64dp"
+    android:height="64dp"
+    android:viewportWidth="64"
+    android:viewportHeight="64">
+
+    <!-- 外边框三角形（黑色描边） -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#000000"
+        android:strokeWidth="2"
+        android:pathData="M32,6 L58,54 L6,54 Z" />
+
+    <!-- 内部填充三角形（橙色） -->
+    <path
+        android:fillColor="#FFA000"
+        android:pathData="M32,10 L54,50 L10,50 Z" />
+</vector>
+

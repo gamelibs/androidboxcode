@@ -64,7 +64,6 @@ class HomeViewModel @Inject constructor(
                     }
                     // 当数据已加载时，更新游戏数量
                     is DataEvent.DataLoaded -> {
-                        _uiState.value = _uiState.value.copy(isLoading = false)
                     }
                     else->{}
                 }
@@ -147,7 +146,6 @@ class HomeViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isLoading = true, isSyncing = true)
-                
                 // 刷新数据
                 dataManager.refreshAllData(true)
                 
@@ -185,6 +183,23 @@ class HomeViewModel @Inject constructor(
                         message = e.message ?: "同步游戏数据失败",
                         actionLabel = "重试",
                         onAction = { syncGameConfig() }
+                    )
+                )
+            }
+        }
+    }
+
+    // 仅刷新 SDK，不刷新游戏列表
+    fun refreshSdkOnly() {
+        viewModelScope.launch {
+            try {
+                // 这里只触发 SDK 预加载/更新逻辑，不改动游戏列表状态
+                dataManager.preloadSdkOnly()
+            } catch (e: Exception) {
+                Log.e(TAG, "刷新 SDK 失败", e)
+                messageService.showMessage(
+                    UiMessage.Error(
+                        message = e.message ?: "刷新 SDK 失败"
                     )
                 )
             }

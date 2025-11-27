@@ -24,7 +24,6 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.FrameLayout
 import android.widget.LinearLayout
-import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.gameboxone.manager.EventManager
@@ -35,11 +34,9 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.MainScope
-import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
-import android.webkit.JavascriptInterface
 import android.view.LayoutInflater
 import androidx.annotation.LayoutRes
 
@@ -74,7 +71,6 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     private lateinit var layoutError: LinearLayout
     private lateinit var textErrorMessage: TextView
     private lateinit var btnRetry: Button
-    private lateinit var progressBar: ProgressBar
 
     private lateinit var webView: WebView
     private var gamePath: String? = null
@@ -120,7 +116,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     // Overlay 覆盖层视图
     private lateinit var layoutOverlay: FrameLayout
-    private lateinit var overlayTask: TextView
+    private var overlayTask: TextView? = null
     private lateinit var btnContinue: Button
 
     // runtime score state — keep latest but only show when topbar visible
@@ -175,16 +171,13 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     val points = game?.taskPoints
                     val desc = game?.taskDesc
                     val text = when {
-                        !points.isNullOrEmpty() -> {
-                            // 显示前四个点
-                            val show = points.take(4).joinToString(separator = ",")
-                            "任务:${show}"
-                        }
+                        // 仅显示第一个任务积分，用于 Goal Achieved 下方
+                        !points.isNullOrEmpty() -> points.first().toString()
                         !desc.isNullOrBlank() -> desc
-                        else -> "任务: -"
+                        else -> "0"
                     }
                     launch(Dispatchers.Main) {
-                        overlayTask.text = text
+                        overlayTask?.text = text
                     }
                 } catch (e: Exception) {
                     Log.w(TAG, "获取任务信息失败: ${e.message}")
@@ -208,7 +201,6 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         layoutError = findViewById(R.id.layout_error)
         textErrorMessage = findViewById(R.id.text_error_message)
         btnRetry = findViewById(R.id.btn_retry)
-        progressBar = findViewById(R.id.progress_bar)
 
         // overlay（遮罩层）容器
         layoutOverlay = findViewById(R.id.layout_overlay)
@@ -276,23 +268,39 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         LayoutInflater.from(this).inflate(layoutRes, layoutOverlay, true)
         // bind controls inside overlay
         overlayTask = layoutOverlay.findViewById(R.id.overlay_task)
-        btnContinue = layoutOverlay.findViewById(R.id.btn_continue)
-        val btnClose = layoutOverlay.findViewById<android.widget.ImageButton?>(R.id.btn_close_overlay)
-        // 关闭按钮默认行为：结束 Activity（返回上一级）
-        btnClose?.setOnClickListener {
-            finish()
-        }
-        btnContinue.setOnClickListener {
-             // hide overlay and start/resume game
-             layoutOverlay.visibility = View.GONE
-             layoutTopbar.visibility = View.VISIBLE
-             // update score display
-             val scoreToShow = currentScore ?: 0
-             tvScore.text = "当前得分:${scoreToShow}"
-             btnPause.tag = "playing"
-             webView.evaluateJavascript("(function(){ if(window.resumeGame) { window.resumeGame(); } if(window.__appResume) { window.__appResume(); } })()", null)
 
-         }
+        // 统一关闭按钮行为：结束 Activity
+        val btnClose = layoutOverlay.findViewById<android.widget.ImageButton?>(R.id.btn_close_overlay)
+        btnClose?.setOnClickListener { finish() }
+
+        // 开始/继续按钮（仅在 view_start_game 中存在）
+        layoutOverlay.findViewById<Button?>(R.id.btn_continue)?.let { btn ->
+            btnContinue = btn
+            btnContinue.setOnClickListener {
+                // hide overlay and start/resume game
+                layoutOverlay.visibility = View.GONE
+                layoutTopbar.visibility = View.VISIBLE
+                // update score display
+                val scoreToShow = currentScore ?: 0
+                tvScore.text = "当前得分:${scoreToShow}"
+                btnPause.tag = "playing"
+                webView.evaluateJavascript(
+                    "(function(){ if(window.resumeGame) { window.resumeGame(); } if(window.__appResume) { window.__appResume(); } })()",
+                    null
+                )
+            }
+        }
+
+        // restart 按钮（仅在 restart_game.xml 中存在）
+        layoutOverlay.findViewById<Button?>(R.id.btn_restart)?.setOnClickListener {
+            // 重新开始游戏：直接退出当前 WebViewActivity，
+            // 回到游戏详情页，由详情页的“开始游戏”按钮重新进入，确保完整的加载流程与资源清理。
+            try {
+                finish()
+            } catch (e: Exception) {
+                Log.w(TAG, "restart game failed", e)
+            }
+        }
     }
 
     /**
@@ -383,21 +391,16 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     return true
                 }
 
-                // 页面开始加载时显示 loading
+                // 页面开始加载（已不再显示自定义 loading 覆盖层）
                 override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
                     super.onPageStarted(view, url, favicon)
                     hasError = false
-                    showLoading()
                 }
 
-                // 页面加载完成，隐藏 loading 显示内容
+                // 页面加载完成：直接记录日志，WebView 内容由自身渲染
                 override fun onPageFinished(view: WebView, url: String) {
                     super.onPageFinished(view, url)
-                    if (!hasError) {
-                        hideLoading()  
-                    }
                     Log.d(TAG, "页面加载完成: $url")
-
                 }
 
                 // 接收错误并展示友好提示
@@ -445,13 +448,13 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
                 override fun updateGameName(name: String) {
                     runOnUiThread {
-                        try { overlayTask.text = name } catch (_: Exception) { }
+                        try { overlayTask?.text = name } catch (_: Exception) { }
                     }
                 }
 
                 override fun updateLevel(level: String) {
                     runOnUiThread {
-                        try { overlayTask.text = "关卡: $level" } catch (_: Exception) { }
+                        try { overlayTask?.text = "关卡: $level" } catch (_: Exception) { }
                     }
                 }
 
@@ -468,14 +471,32 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     runOnUiThread {
                         try {
                             // show time in overlayTask if appropriate (keep simple)
-                            overlayTask.text = time
+                            overlayTask?.text = time
                         } catch (_: Exception) { }
                     }
                 }
 
                 override fun handleAdEvent(eventType: String, data: String) {
+                    // 处理来自游戏 SDK 的通用事件（例如 game_over）
                     Log.d(TAG, "handleAdEvent from bridge: type=$eventType data=$data")
-                    // default: forward to AdGameEventBridge via registrar wiring (already set up there)
+                    when (eventType.lowercase()) {
+                        "game_over" -> {
+                            runOnUiThread {
+                                try {
+                                    // 仅显示 restart 游戏面板，不再调用 WebView.onPause()/pauseTimers，
+                                    // 避免阻断后续页面执行；音频停止交由游戏自身在 game_over 场景中处理。
+                                    inflateOverlay(R.layout.view_restart_game)
+                                    layoutOverlay.visibility = View.VISIBLE
+                                    layoutTopbar.visibility = View.GONE
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "failed to show restart overlay", e)
+                                }
+                            }
+                        }
+                        else -> {
+                            // 其他事件暂时只记录日志
+                        }
+                    }
                 }
             }
 
@@ -536,19 +557,15 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
      * @param progress [0,100]
      */
     private fun updateLoadingProgress(progress: Int) {
-        progressBar.progress = progress
-        if (progress >= 100) {
-            hideLoading()
-        }
+        // 保留占位：如需基于 progress 做额外处理可在此扩展
     }
 
     /**
      * 显示 loading 页面（隐藏 web 内容与错误页）
      */
     private fun showLoading() {
-        layoutLoading.visibility = View.VISIBLE
-        layoutError.visibility = View.GONE
-        layoutWeb.visibility = View.GONE
+        // 已不再使用独立 loading 覆盖层，这里保持布局为隐藏状态
+        layoutLoading.visibility = View.GONE
     }
 
     /**
@@ -556,7 +573,6 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
      */
     private fun hideLoading() {
         layoutLoading.visibility = View.GONE
-        layoutWeb.visibility = View.VISIBLE
     }
 
     /**
@@ -608,11 +624,22 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         super.onDestroy()
         isDestroyed = true
         // 清理WebView资源，防止内存泄漏
-        webView.apply {
-            stopLoading()
-            clearHistory()
-            loadUrl("about:blank")
-            removeAllViews()
+        try {
+            webView.apply {
+                stopLoading()
+                clearHistory()
+                loadUrl("about:blank")
+                removeAllViews()
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "onDestroy: 清理 WebView 失败", e)
+        }
+
+        // 确保本地静态服务器也被停止，避免下一次重启游戏时复用脏状态
+        try {
+            webServerManager.stopServer()
+        } catch (e: Exception) {
+            Log.w(TAG, "onDestroy: 停止本地 Web 服务器失败", e)
         }
     }
 

@@ -21,9 +21,9 @@ import kotlin.text.isBlank
 import kotlin.text.lowercase
 
 /**
- * 游戏数据桥接器 - 简化版
+ * 游戏数据桥接器
  * 用于JS和Android之间的游戏数据交互
- * 只提供5个核心方法：game_start、level_start、level_end、ads_events、health
+ * 只提供核心方法：ALLOWED_EVENTS
  * 支持回调机制和异常处理
  */
 class GameDataBridge(
@@ -34,6 +34,25 @@ class GameDataBridge(
     companion object {
         private const val TAG = "GameDataBridge"
         private const val BRIDGE_TAG = "GAME_EVENTS_BRIDGE"
+        // 事件白名单（仅处理这些事件，其余走兜底或忽略）
+        private val ALLOWED_EVENTS: Set<String> = setOf(
+            "ready",
+            "health",
+            "interstitial",
+            "reward",
+            "game_score",
+            "game_level",
+            "game_start",
+            "level_start",
+            "level_end",
+            "game_over",
+            "game_time",
+            "load_update",
+            "load_complete",
+            "banner",
+            "openad",
+            "app_open"
+        )
     }
     
     init {
@@ -309,7 +328,16 @@ class GameDataBridge(
         }
 
         Log.d(TAG, "processSingleEvent: resolved eventType='$eventType', json=$json")
-        Log.d(TAG, "processSingleEvent: checking if eventType matches ad types...")
+
+        // 事件白名单控制：不在白名单中的事件统一透传给 UI 模块的 handleAdEvent，避免无关事件污染主流程
+        val normalizedType = eventType.lowercase()
+        if (!ALLOWED_EVENTS.contains(normalizedType)) {
+            Log.d(TAG, "processSingleEvent: eventType '$eventType' not in whitelist, forwarding to handleAdEvent only")
+            uiModule?.handleAdEvent(eventType, json.toString())
+            return
+        }
+
+        Log.d(TAG, "processSingleEvent: eventType '$eventType' is whitelisted, dispatching to handlers")
 
         // 将所有 UI 更新包装到 processEventWithCallback 中，保证回调与异常处理一致
         val dataStr = json.toString()
@@ -322,6 +350,45 @@ class GameDataBridge(
                 "level_start", "LEVEL_START" -> {
                     val levelName = json.optString("level_name", "关卡1")
                     uiModule?.updateLevel(levelName)
+                }
+                "game_score", "GAME_SCORE" -> {
+                    // 定时上报的分数事件：优先从 value/score 字段提取数字
+                    var scoreStr = "0"
+                    try {
+                        if (json.has("value")) {
+                            val v = json.opt("value")
+                            scoreStr = when (v) {
+                                is Number -> v.toString()
+                                is String -> {
+                                    // 可能是纯数字字符串，或 JSON 字符串
+                                    val trimmed = v.trim()
+                                    try {
+                                        val obj = JSONObject(trimmed)
+                                        obj.optString("score", trimmed)
+                                    } catch (_: Exception) {
+                                        trimmed
+                                    }
+                                }
+                                is JSONObject -> {
+                                    v.optString("score", v.optString("value", "0"))
+                                }
+                                else -> json.optString("score", json.optString("value", "0"))
+                            }
+                        } else {
+                            scoreStr = json.optString("score", json.optString("value", "0"))
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "game_score parsing failed, fallback to 0", e)
+                        scoreStr = "0"
+                    }
+
+                    // 仅保留数字部分，保证 UI 始终展示纯数字
+                    val numericScore = scoreStr.takeIf { it.isNotBlank() }?.let { s ->
+                        val m = Regex("(\\d+)").find(s)
+                        m?.value ?: "0"
+                    } ?: "0"
+
+                    uiModule?.updateScore(numericScore)
                 }
                 "level_end", "LEVEL_END" -> {
                     // 优先支持 { "value": { ... } } 结构（来自 adsdklayer 中的 value 字段）

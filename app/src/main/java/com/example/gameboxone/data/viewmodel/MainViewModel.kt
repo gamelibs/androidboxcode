@@ -114,20 +114,30 @@ class MainViewModel @Inject constructor(
                 }
                 
                 // 自动移除消息（可选，根据需求决定是否添加）
-                if (message is UiMessage.Error) {
-                    // 错误消息显示时间较长
-                    kotlinx.coroutines.delay(5000)
+                // 如果是 Dialog 且 dismissOnConfirm == false，则不自动移除（需手动调用 dismissMessage）
+                val shouldAutoRemove = when (message) {
+                    is UiMessage.Dialog -> message.dismissOnConfirm
+                    else -> true
+                }
+
+                if (shouldAutoRemove) {
+                    if (message is UiMessage.Error) {
+                        // 错误消息显示时间较长
+                        kotlinx.coroutines.delay(5000)
+                    } else {
+                        // 普通消息显示较短时间
+                        kotlinx.coroutines.delay(3000)
+                    }
+
+                    // 自动移除消息
+                    _messages.update { currentMessages ->
+                        currentMessages.filter { it.id != message.id }
+                    }
                 } else {
-                    // 普通消息显示较短时间
-                    kotlinx.coroutines.delay(3000)
+                    Log.d(TAG, "消息为不可自动关闭的 Dialog（id=${message.id}），等待手动关闭")
                 }
-                
-                // 自动移除消息
-                _messages.update { currentMessages ->
-                    currentMessages.filter { it.id != message.id }
-                }
-            }
-        }
+             }
+         }
     }
 
     fun dismissMessage(id: String) {

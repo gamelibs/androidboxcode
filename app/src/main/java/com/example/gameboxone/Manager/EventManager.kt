@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import java.util.LinkedList
 import java.util.Queue
+import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -38,6 +39,9 @@ class EventManager @Inject constructor(
 ) {
     // 添加协程作用域，替代viewModelScope
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
+    // 保证游戏事件处理器只被注册一次
+    private val gameHandlerRegistered = AtomicBoolean(false)
 
     // 添加错误重试机制
     private suspend fun <T> withRetry(
@@ -92,7 +96,7 @@ class EventManager @Inject constructor(
             }
         }
         
-        // 自动注册游戏事件处理器
+        // 自动注册游戏事件处理器（registerGameEventHandler 已实现幂等）
         registerGameEventHandler()
     }
 
@@ -275,9 +279,12 @@ class EventManager @Inject constructor(
     }
     
     /**
-     * 注册事件监听并自动处理
+     *  注册事件监听并自动处理（幂等）
      */
     fun registerGameEventHandler() {
+        // 如果已经注册，则直接返回，防止重复注册导致事件被多次处理
+        if (!gameHandlerRegistered.compareAndSet(false, true)) return
+
         coroutineScope.launch {
             try {
                 gameEvents.collect { event ->
@@ -287,6 +294,8 @@ class EventManager @Inject constructor(
                 Log.e(TAG, "游戏事件监听出错", e)
                 // 重新尝试注册
                 delay(1000)
+                // 重置注册标志以允许重试注册
+                gameHandlerRegistered.set(false)
                 registerGameEventHandler()
             }
         }

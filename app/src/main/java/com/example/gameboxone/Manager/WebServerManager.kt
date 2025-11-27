@@ -13,7 +13,8 @@ import javax.inject.Singleton
 
 @Singleton
 class WebServerManager @Inject constructor(
-    private val context: Context
+    private val context: Context,
+    private val sdkManager: SdkManager
 ) {
     private val TAG = "WebServerManager"
     private var server: GameLocalServer? = null
@@ -262,8 +263,24 @@ class WebServerManager @Inject constructor(
                     uri
                 }
 
-                // 解析请求的文件路径
-                val file = File(rootDir, requestedPath)
+                // 如果请求的是 SDK 文件（如 AndroidCp.min.js），统一使用全局 SDK 缓存文件
+                val sdkOverrideFile: File? = try {
+                    val sdkPath = sdkManager.getSdkPath()
+                    if (sdkPath.isNotBlank()) {
+                        val sdkFile = File(sdkPath)
+                        val requestedName = requestedPath.substringAfterLast('/')
+                        val sdkName = sdkFile.name
+                        if (sdkFile.exists() && requestedName == sdkName) sdkFile else null
+                    } else {
+                        null
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "解析 SDK 覆盖文件时出错", e)
+                    null
+                }
+
+                // 解析请求的文件路径；若有 SDK 覆盖文件则优先使用
+                val file = sdkOverrideFile ?: File(rootDir, requestedPath)
 
                 if (!file.exists()) {
                     Log.e(TAG, "文件不存在: ${file.absolutePath}")

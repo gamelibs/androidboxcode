@@ -1,6 +1,8 @@
 package com.example.gameboxone.ui.screen
 
 import com.example.gameboxone.AppLog as Log
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -8,8 +10,12 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Warning
@@ -31,6 +37,8 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -122,16 +130,16 @@ fun GameDetailScreen(
 
     Scaffold(
         topBar = {
-
             TopAppBar(
-                title = { Text(text = state.game?.name ?: "游戏详情") },
+                title = { Text(text = "") },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.onBackPressed() }) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
                     }
                 }
             )
-        }
+        },
+        containerColor = Color.White
     ) { paddingValues ->
         // 主要内容
         Box(
@@ -180,50 +188,131 @@ private fun GameContent(
         modifier = Modifier
             .fillMaxSize()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // 游戏信息
         Text(
-            text = "游戏名称: ${game.name}",
-            style = MaterialTheme.typography.headlineMedium
+            text = game.name,
+            style = MaterialTheme.typography.headlineMedium,
+            color = Color.Black
         )
         Text(
-            text = "游戏描述: ${game.description}",
-            style = MaterialTheme.typography.bodyLarge
+            text = game.description,
+            style = MaterialTheme.typography.bodyLarge,
+            color = Color.Black
         )
 
-        // 操作按钮
-        Button(
-            onClick = onLaunchGame, // 这里调用回调函数
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text(text = "开始游戏")
-        }
-
-        // 任务描述和积分（若存在）
-        game.taskDesc?.let { desc ->
-            Spacer(modifier = Modifier.height(12.dp))
-            Text(text = desc, style = MaterialTheme.typography.bodyLarge)
-        }
-
+        // 任务积分条（黄色任务条）
         val points = game.taskPoints ?: emptyList()
         if (points.isNotEmpty()) {
             Spacer(modifier = Modifier.height(16.dp))
-            // 只显示前四个任务点
-            val toShow = points.take(4)
-            Column(
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                toShow.forEachIndexed { idx, value ->
-                    Text(
-                        text = "任务${idx + 1}：$value",
-                        style = MaterialTheme.typography.headlineMedium
-                    )
-                }
-            }
+            TaskPointsSection(points = points)
         }
+
+        // 占位，将开始按钮推到底部附近
+        Spacer(modifier = Modifier.weight(1f))
+
+        // 操作按钮 - 使用游戏风格的绿色圆角按钮
+        StartGameButton(
+            text = "开始游戏",
+            onClick = onLaunchGame
+        )
+    }
+}
+
+@Composable
+private fun TaskPointsSection(points: List<Int>) {
+    // 只显示前四个任务点
+    val toShow = points.take(4)
+    Column(
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        modifier = Modifier
+            .fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        toShow.forEachIndexed { index, value ->
+            TaskPointBar(index = index + 1, score = value)
+        }
+    }
+}
+
+@Composable
+private fun TaskPointBar(
+    index: Int,
+    score: Int
+) {
+    val pillShape = RoundedCornerShape(999.dp)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth(0.8f)
+            .height(48.dp)
+            .background(color = Color(0xFFFFB300), shape = pillShape)
+            .border(
+                width = 2.dp,
+                color = Color.Black,
+                shape = pillShape
+            )
+            .padding(horizontal = 24.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = score.toString(),
+            color = Color.Black,
+            style = MaterialTheme.typography.titleMedium
+        )
+
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .background(color = Color(0xFFFFEB3B), shape = CircleShape)
+                .border(
+                    width = 2.dp,
+                    color = Color.Black,
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = index.toString(),
+                color = Color.Black,
+                style = MaterialTheme.typography.bodyMedium
+            )
+        }
+    }
+}
+
+@Composable
+private fun StartGameButton(
+    text: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true
+) {
+    val shape = RoundedCornerShape(28.dp)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        Color(0xFF8BF94A), // 顶部偏亮的绿色高光
+                        Color(0xFF3FBF3A)  // 底部偏深的绿色
+                    )
+                ),
+                shape = shape
+            )
+            .clickable(enabled = enabled, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            color = Color.White,
+            style = MaterialTheme.typography.titleMedium
+        )
     }
 }
 

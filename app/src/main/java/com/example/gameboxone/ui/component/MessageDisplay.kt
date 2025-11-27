@@ -52,6 +52,13 @@ fun MessageDisplay(
                     onDismiss = { onDismiss(message) }
                 )
             }
+            is UiMessage.Dialog -> {
+                // 专门处理 Dialog 类型，使用 MessageDialog 以尊重 cancelable / dismissOnConfirm
+                MessageDialog(
+                    message = message,
+                    onDismiss = { onDismiss(message) }
+                )
+            }
             // 处理其他类型消息
             else -> {
                 InfoMessage(
@@ -136,7 +143,9 @@ fun MessageDialog(
     message: UiMessage.Dialog,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Dialog(onDismissRequest = {
+        if (message.cancelable) onDismiss()
+    }) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -163,12 +172,20 @@ fun MessageDialog(
             ) {
                 Button(
                     onClick = {
-                        message.confirmAction()
-                        onDismiss()
-                    }
-                ) {
-                    Text("确定")
-                }
+                        // 优先关闭对话以保证用户交互立即响应（即使 confirmAction 抛异常也不会阻止关闭）
+                        if (message.dismissOnConfirm) {
+                            onDismiss()
+                        }
+
+                        try {
+                            message.confirmAction()
+                        } catch (e: Exception) {
+                            Log.w("MessageDisplay", "confirmAction threw", e)
+                        }
+                     }
+                 ) {
+                     Text("确定")
+                 }
             }
         }
     }

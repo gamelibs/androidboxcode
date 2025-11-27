@@ -3,6 +3,7 @@ package com.example.gameboxone.di
 import android.content.Context
 import androidx.room.Room
 import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.SdkManager
 import com.example.gameboxone.manager.WebServerManager
 import com.example.gameboxone.base.AppDatabase
 import com.example.gameboxone.service.MessageService
@@ -57,8 +58,11 @@ object AppModule {
      */
     @Singleton
     @Provides
-    fun provideWebServerManager(@ApplicationContext context: Context): WebServerManager {
-        return WebServerManager(context)
+    fun provideWebServerManager(
+        @ApplicationContext context: Context,
+        sdkManager: SdkManager
+    ): WebServerManager {
+        return WebServerManager(context, sdkManager)
     }
     
     // 如果需要提供DAO，可以在这里添加
