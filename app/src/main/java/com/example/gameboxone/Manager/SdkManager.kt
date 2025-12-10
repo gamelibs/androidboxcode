@@ -35,7 +35,7 @@ class SdkManager @Inject constructor(
     }
 
     // SDK文件（可能为空，如果未配置则返回 null）
-    // 注意：不再使用默认的 "sdk.min.js"，文件名必须由远程 params 或本地配置提供
+    // 注意：文件名必须由远程 params 或本地配置提供
     private val sdkFile: File?
         get() {
             val name = netManager.getSdkFileName()

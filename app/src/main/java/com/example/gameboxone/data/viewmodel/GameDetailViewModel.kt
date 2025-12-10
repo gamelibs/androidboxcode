@@ -219,16 +219,16 @@ class GameDetailViewModel @Inject constructor(
                 setLoading(true)
                 Log.d(TAG, "准备启动游戏: ${game.name}, 正在检查资源...")
 
-                // 首先检查本地缓存，然后检查保底目录，最后尝试网络下载
+                // 使用 ResourceManager 统一检查资源状态
                 when (val resourceState = resourceManager.ensureGameResourceAvailable(game)) {
                     is GameResourceState.Available -> {
-                        // 游戏资源已经可用，直接启动游戏
-                        Log.d(TAG, "游戏资源准备完毕，启动游戏: ${game.name}")
+                        // 资源已就绪，直接启动
+                        Log.d(TAG, "游戏资源已就绪，直接启动: ${game.name}, path=${resourceState.localPath}")
                         WebViewActivity.start(context, resourceState.localPath, game.id)
                     }
 
                     is GameResourceState.LoadingFromBackup -> {
-                        // 正在从保底目录加载，显示加载进度
+                        // 从保底目录安装，并写入我的游戏
                         Log.d(TAG, "从保底目录加载游戏资源: ${game.name}")
                         setState {
                             copy(
@@ -236,20 +236,21 @@ class GameDetailViewModel @Inject constructor(
                                 loadingMessage = "正在准备游戏资源..."
                             )
                         }
-                        
-                        // 使用MyGameManager安装游戏 - 包括资源提取和数据库操作
+
+                        // 通过 MyGameManager 进行安装（包含 DB 记录和事件）
                         myGameManager.installGameFromBackup(game).onSuccess { localPath ->
-                            // 加载成功，启动游戏
+                            Log.d(TAG, "保底资源安装成功，写入我的游戏并启动: ${game.name}, path=$localPath")
                             WebViewActivity.start(context, localPath, game.id)
                         }.onFailure { error ->
-                            // 加载失败，尝试网络下载
-                            handleError("从备份目录加载失败: ${error.message}")
+                            Log.w(TAG, "保底资源安装失败，尝试网络下载: ${game.name}", error)
+                            handleError("从本地资源加载失败: ${error.message}")
                             handleNeedDownload(game)
                         }
                     }
 
                     is GameResourceState.NeedDownload -> {
-                        // 需要从网络下载
+                        // 需要从网络下载：弹出下载对话框，后续通过 startDownload 调用 MyGameManager 下载并写入 my_games
+                        Log.d(TAG, "游戏资源不存在，准备走下载流程: ${game.name}")
                         handleNeedDownload(game)
                     }
 
@@ -258,7 +259,8 @@ class GameDetailViewModel @Inject constructor(
                     }
 
                     GameResourceState.Loading -> {
-                        // 已经在加载中，等待
+                        // 已在其他地方加载中，这里不重复处理
+                        Log.d(TAG, "游戏资源正在加载中，等待完成: ${game.name}")
                     }
                 }
             } catch (e: Exception) {
@@ -271,23 +273,19 @@ class GameDetailViewModel @Inject constructor(
     }
 
     /**
-     * 处理需要下载的情况
+     * 处理需要下载的情况：展示下载对话框，由 startDownload 触发实际下载
      */
     private fun handleNeedDownload(game: Custom.HotGameData) {
         Log.d(TAG, "游戏资源不存在，需要下载: ${game.name}")
-        
-        // 检查URL是否有效
-        // 如果下载地址为空，则直接尝试本地 assets
+
         if (game.downloadUrl.isBlank()) {
-            Log.w(TAG, "下载URL为空，尝试直接从本地资源获取: ${game.downloadUrl}")
+            Log.w(TAG, "下载URL为空，尝试从本地资源加载: ${game.name}")
             tryLoadFromLocalAssets(game)
             return
         }
-        
-        // 获取下载信息（避免与 state.downloadInfo 冲突，使用不同名称）
+
         val resolvedInfo = resourceManager.resolveDownloadInfo(game.downloadUrl, game.gameRes)
 
-        // 显示下载对话框
         setState {
             copy(
                 showDownloadDialog = true,
@@ -301,18 +299,17 @@ class GameDetailViewModel @Inject constructor(
     }
 
     /**
-     * 尝试直接从本地资源获取游戏 - 优化版
+     * 尝试直接从本地资源获取游戏，并写入“我的游戏”
      */
     private fun tryLoadFromLocalAssets(game: Custom.HotGameData) {
         viewModelScope.launch {
             try {
                 setState { copy(isLoading = true, loadingMessage = "正在从本地资源加载游戏...") }
-                
-                // 使用MyGameManager统一处理资源加载和数据库操作
+
+                // 使用 MyGameManager 统一处理资源提取和写 DB
                 myGameManager.installGameFromBackup(game).fold(
                     onSuccess = { localPath ->
-                        Log.d(TAG, "从本地资源成功加载游戏: ${game.name}")
-                        // 成功加载，启动游戏，使用WebViewActivity
+                        Log.d(TAG, "从本地资源成功加载并记录游戏: ${game.name}, path=$localPath")
                         WebViewActivity.start(context, localPath, game.id)
                         setState { copy(isLoading = false, loadingMessage = null) }
                     },
@@ -331,26 +328,15 @@ class GameDetailViewModel @Inject constructor(
     }
 
     /**
-     * 关闭下载对话框
-     */
-    fun dismissDownloadDialog() {
-        setState {
-            copy(
-                showDownloadDialog = false,
-                downloadInfo = null
-            )
-        }
-    }
-
-    /**
-     * 开始下载游戏
+     * 开始下载游戏：通过 MyGameManager 完成下载+安装+写入 my_games
      */
     fun startDownload() {
         viewModelScope.launch {
             try {
                 val downloadInfo = state.value.downloadInfo
-                if (downloadInfo == null) {
-                    handleError("下载信息不存在")
+                val game = state.value.game
+                if (downloadInfo == null || game == null) {
+                    handleError("下载信息或游戏数据不存在")
                     return@launch
                 }
 
@@ -365,77 +351,93 @@ class GameDetailViewModel @Inject constructor(
                 }
 
                 // 发送下载开始事件
-                state.value.game?.let { game ->
-                    emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
-                }
+                emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
 
-                // 统一通过 ResourceManager.getDownloadInfo 获取解析后的URL和targetPath
-                val gameRes = state.value.game?.gameRes ?: ""
-                val resolvedInfo = resourceManager.resolveDownloadInfo(downloadInfo.downloadUrl, gameRes)
+                // 统一通过 MyGameManager 下载并安装（内部会调用 ResourceManager.downloadAndInstallGame + 写 my_games + 更新 game_config）
+                // 将 HotGameData 转换为 MyGameData 以符合 MyGameManager.downloadAndInstallGame 的参数类型
+                val myGameData = Custom.MyGameData(
+                    id = game.id,
+                    gameId = game.gameId,
+                    name = game.name,
+                    iconUrl = game.iconUrl,
+                    gameRes = game.gameRes,
+                    rating = game.rating,
+                    patch = game.patch,
+                    description = game.description,
+                    downloadUrl = downloadInfo.downloadUrl,
+                    isLocal = false,
+                    localPath = "",
+                    size = null,
+                    hasUpdate = false,
+                    installTime = System.currentTimeMillis().toString(),
+                    lastPlayTime = "0",
+                    playCount = 0,
+                    taskDesc = game.taskDesc,
+                    taskPoints = game.taskPoints
+                )
 
-                if (resolvedInfo.downloadUrl.isBlank() || !resolvedInfo.downloadUrl.startsWith("http")) {
-                    Log.w(TAG, "下载URL无效（解析后）: ${resolvedInfo.downloadUrl}，尝试从本地资源获取")
-                    state.value.game?.let { tryLoadFromLocalAssets(it) }
-                    return@launch
-                }
+                myGameManager.downloadAndInstallGame(
+                    game = myGameData,
+                    onProgress = { progress ->
+                        setState { copy(downloadProgress = progress) }
+                    }
+                ).fold(
+                    onSuccess = { localPath ->
+                        Log.d(TAG, "游戏下载并安装成功，写入我的游戏: ${game.name}, path=$localPath")
 
-                resourceManager.downloadAndInstallGame(
-                    downloadUrl = resolvedInfo.downloadUrl,
-                    targetPath = resolvedInfo.targetPath
-                ) { progress ->
-                    // 更新下载进度
-                    setState { copy(downloadProgress = progress) }
-                }.fold(
-                    onSuccess = { _ ->
-                         // 下载成功
-                         setState {
-                             copy(
-                                 isDownloading = false,
-                                 downloadProgress = 0f,
-                                 loadingMessage = null
-                             )
-                         }
+                        // 发送完成事件
+                        emitGameEvent(
+                            GameEvent.GameDownloadCompleted(
+                                Custom.ToBaseData(game.id, game.name, game.iconUrl)
+                            )
+                        )
 
-                         // 发送完成事件
-                         state.value.game?.let { game ->
-                             emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
-                         }
-                         // 下载完成后再次尝试启动游戏
-                         launchGame()
-                     },
-                     onFailure = { error ->
-                         // 下载失败后尝试从本地资源获取
-                         Log.e(TAG, "游戏下载失败，尝试从本地资源获取", error)
+                        // 下载完成后直接启动游戏
+                        WebViewActivity.start(context, localPath, game.id)
 
-                         // 重置下载状态
-                         setState {
-                             copy(
-                                 isDownloading = false,
-                                 downloadProgress = 0f,
-                                 loadingMessage = "尝试从本地资源获取游戏..."
-                             )
-                         }
-
-                         // 尝试从本地资源获取
-                         state.value.game?.let { tryLoadFromLocalAssets(it) }
-                     }
-                 )
+                        setState {
+                            copy(
+                                isDownloading = false,
+                                downloadProgress = 0f,
+                                loadingMessage = null
+                            )
+                        }
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "游戏下载/安装失败: ${game.name}", error)
+                        handleError("游戏下载失败: ${error.message}")
+                        setState {
+                            copy(
+                                isDownloading = false,
+                                downloadProgress = 0f,
+                                loadingMessage = null
+                            )
+                        }
+                    }
+                )
             } catch (e: Exception) {
-                // 处理异常情况
-                Log.e(TAG, "下载过程出现异常，尝试从本地资源获取", e)
-                
-                // 重置下载状态
+                Log.e(TAG, "开始下载游戏时出错", e)
+                handleError("请求下载游戏失败: ${e.message}")
                 setState {
                     copy(
                         isDownloading = false,
                         downloadProgress = 0f,
-                        loadingMessage = "尝试从本地资源获取游戏..."
+                        loadingMessage = null
                     )
                 }
-                
-                // 尝试从本地资源获取
-                state.value.game?.let { tryLoadFromLocalAssets(it) }
             }
+        }
+    }
+
+    /**
+     * 关闭下载对话框
+     */
+    fun dismissDownloadDialog() {
+        setState {
+            copy(
+                showDownloadDialog = false,
+                downloadInfo = null
+            )
         }
     }
 

@@ -189,4 +189,18 @@ object AdGameEventBridge {
     // Rewarded
     fun rewardViewed(type: String, amount: Int) = adViewed("reward", mapOf("reward_type" to type, "amount" to amount))
     fun rewardDismissed() = send("adDismissed" to "reward")
+
+    fun notifyAppAdsOnChanged(enabled: Boolean) {
+        try {
+            val cb = AndroidEventCallBackHolder.callback() ?: callbackRef?.get()
+            if (cb == null) {
+                Log.d(TAG, "notifyAppAdsOnChanged skipped: callback is null")
+                return
+            }
+            cb.sendAppAdsOn(enabled)
+            Log.d(TAG, "notifyAppAdsOnChanged: app_ads_on=$enabled sent to JS")
+        } catch (e: Exception) {
+            Log.w(TAG, "notifyAppAdsOnChanged failed", e)
+        }
+    }
 }

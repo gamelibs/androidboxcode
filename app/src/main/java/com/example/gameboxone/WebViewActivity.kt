@@ -12,6 +12,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.media.AudioManager
 import android.util.Log
 import android.view.View
 import android.view.ViewGroup
@@ -123,6 +124,11 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     // 当前得分仅在顶部 topbar 可见（游戏已开始）时显示
     private var currentScore: Int? = null
 
+    // 音频管理：用于在 play 按钮未激活时静音 WebView（通过系统媒体音量）
+    private var audioManager: AudioManager? = null
+    private var originalMusicVolume: Int? = null
+    private var isPlayButtonEnabled: Boolean = false
+
     /**
      * Activity 生命周期 onCreate
      * 1) 隐藏系统栏（全屏），因为游戏希望沉浸式显示
@@ -144,6 +150,9 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
         // 初始化视图（绑定 layout 中的所有子视图引用）
         initViews()
+
+        // 初始化音频管理器
+        audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         
         // 获取游戏路径和 ID（由 caller 传入）
         gamePath = intent.getStringExtra(KEY_GAME_PATH)
@@ -206,6 +215,8 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         layoutOverlay = findViewById(R.id.layout_overlay)
         // Inflate initial overlay (start page) — 默认显示开始游戏页面（start）
         inflateOverlay(R.layout.view_start_game)
+        // 初始进入时禁止点击 play 按钮，并静音
+        setPlayButtonEnabled(false)
 
         // topbar（包含返回/暂停/分数）
         layoutTopbar = findViewById(R.id.layout_topbar)
@@ -276,6 +287,12 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // 开始/继续按钮（仅在 view_start_game 中存在）
         layoutOverlay.findViewById<Button?>(R.id.btn_continue)?.let { btn ->
             btnContinue = btn
+            // 根据当前状态更新按钮可用性（初次进入时可能被禁用）
+            btnContinue.isEnabled = isPlayButtonEnabled
+            btnContinue.setBackgroundResource(
+                if (isPlayButtonEnabled) R.drawable.bg_green_game_button
+                else R.drawable.bg_gray_game_button
+            )
             btnContinue.setOnClickListener {
                 // hide overlay and start/resume game
                 layoutOverlay.visibility = View.GONE
@@ -300,6 +317,51 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             } catch (e: Exception) {
                 Log.w(TAG, "restart game failed", e)
             }
+        }
+    }
+
+    /**
+     * 控制开始游戏按钮是否可用，并在禁用时静音 WebView（通过系统媒体音量）
+     */
+    private fun setPlayButtonEnabled(enabled: Boolean) {
+        isPlayButtonEnabled = enabled
+
+        // 更新按钮可用状态与透明度
+        try {
+            if (this::layoutOverlay.isInitialized) {
+                layoutOverlay.findViewById<Button?>(R.id.btn_continue)?.let { btn ->
+                    btn.isEnabled = enabled
+                    btn.setBackgroundResource(
+                        if (enabled) R.drawable.bg_green_game_button
+                        else R.drawable.bg_gray_game_button
+                    )
+                }
+            }
+        } catch (_: Exception) {
+        }
+
+        // 根据状态静音或恢复媒体音量
+        muteWebViewAudio(!enabled)
+    }
+
+    private fun muteWebViewAudio(mute: Boolean) {
+        val am = audioManager ?: return
+        try {
+            if (mute) {
+                if (originalMusicVolume == null) {
+                    originalMusicVolume = am.getStreamVolume(AudioManager.STREAM_MUSIC)
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, 0, 0)
+                    Log.d(TAG, "WebView audio muted via AudioManager")
+                }
+            } else {
+                originalMusicVolume?.let { vol ->
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, vol, 0)
+                    Log.d(TAG, "WebView audio restored via AudioManager to $vol")
+                }
+                originalMusicVolume = null
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "muteWebViewAudio failed", e)
         }
     }
 
@@ -410,6 +472,24 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     error: WebResourceError?
                 ) {
                     super.onReceivedError(view, request, error)
+                    // 仅在主 Frame 加载失败时展示错误页面，避免因为 favicon 等资源失败导致整页报错
+                    val isMainFrame = if (request != null) {
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                            request.isForMainFrame
+                        } else {
+                            // 旧版本无法直接判断，只能通过 URL 近似判断
+                            val failingUrl = request.url?.toString() ?: ""
+                            failingUrl == gameUrl || failingUrl.endsWith("/index.html")
+                        }
+                    } else {
+                        true
+                    }
+
+                    if (!isMainFrame) {
+                        Log.w(TAG, "子资源加载错误（忽略）: ${error?.errorCode} ${error?.description}")
+                        return
+                    }
+
                     hasError = true
                     val errorMessage = error?.let { "错误 ${it.errorCode}: ${it.description}" } ?: "未知错误"
                     showError("加载错误: $errorMessage")
@@ -480,6 +560,12 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     // 处理来自游戏 SDK 的通用事件（例如 game_over）
                     Log.d(TAG, "handleAdEvent from bridge: type=$eventType data=$data")
                     when (eventType.lowercase()) {
+                        "load_complete", "loading_complete" -> {
+                            // 游戏 SDK 完成加载，允许点击 play 并恢复声音
+                            runOnUiThread {
+                                setPlayButtonEnabled(true)
+                            }
+                        }
                         "game_over" -> {
                             runOnUiThread {
                                 try {
@@ -623,6 +709,9 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     override fun onDestroy() {
         super.onDestroy()
         isDestroyed = true
+
+        // 恢复媒体音量
+        muteWebViewAudio(false)
         // 清理WebView资源，防止内存泄漏
         try {
             webView.apply {

@@ -694,6 +694,7 @@ class NetManager @Inject constructor(
         fun getSdkUrlInternal(): String = SDK_URL
         fun getRemoteSdkVersionInternal(): String = REMOTE_SDK_VERSION
         fun getSdkFileNameInternal(): String = SDK_FILE_NAME
+        fun getRemoteConfigUrlInternal(): String = REMOTE_CONFIG_URL
 
         /**
          * 根据远端配置构建 SDK_URL：
@@ -748,6 +749,7 @@ class NetManager @Inject constructor(
     fun getSdkUrl(): String = Companion.getSdkUrlInternal()
     fun getRemoteSdkVersion(): String = Companion.getRemoteSdkVersionInternal()
     fun getSdkFileName(): String = Companion.getSdkFileNameInternal()
+    fun getGameConfigUrl(): String = Companion.getRemoteConfigUrlInternal()
 
      /**
       * 将一个相对路径解析为完整资源 URL（会去掉起始的斜杠以防重复）

@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.os.Handler
 import android.os.Looper
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import org.json.JSONObject
@@ -225,6 +225,7 @@ class GameDataBridge(
                 try {
                     val t = item.optString("type", "")
                     val v = item.optString("value", "")
+                    Log.d(TAG, "JS上行事件: type=$t, value=$v")
                     // Ignore ad_error coming from H5 to avoid potential echo/loop where
                     // an incoming ad_error triggers native-side ad_error OUT messages.
                     if (t.equals("ad_error", true)) {
@@ -233,10 +234,7 @@ class GameDataBridge(
                     }
                     // 兼容两种上报名：旧版 add_ads_event 与新版 app_ads_event
                     if (t == "app_ads_event" &&  v == "is_ads_native"){
-                        // 新需求：当 Enable Ads 关闭时，下行 false；并以 50% 概率静默不下发
-                        // 当 Enable Ads 开启时，保留原逻辑（延时下发 true）
                         try {
-                            // 读取 Enable Ads（与 handleAdEvent 相同的偏好键）
                             val ctx = try {
                                 val webView = eventCallBack?.let { callback ->
                                     val field = callback.javaClass.getDeclaredField("webViewRef")
@@ -252,36 +250,14 @@ class GameDataBridge(
 
                             val adsEnabled = try {
                                 val prefs = ctx?.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-                                prefs?.getBoolean("ad_consent_enabled", false) ?: false
-                            } catch (e: Exception) { false }
+                                prefs?.getBoolean("ad_consent_enabled", true) ?: true
+                            } catch (e: Exception) { true }
 
-                            if (!adsEnabled) {
-                                // 关闭：50% 概率不下发（静默），50% 下发 false
-                                val sendOrSilent = Random.nextBoolean()
-                                if (sendOrSilent) {
-                                    try { eventCallBack?.sendAppAdsOn(false) } catch (e: Exception) { Log.w(TAG, "sendAppAdsOn(false) failed", e) }
-                                    Log.d(TAG, "app_ads_event: ads disabled -> sent app_ads_on(false)")
-                                } else {
-                                    Log.d(TAG, "app_ads_event: ads disabled -> silent (no downlink)")
-                                }
-                            } else {
-                                // 开启：沿用延时下发 true 的策略，并用 guard 防抖
-                                if (!appAdsProbeScheduled) {
-                                    appAdsProbeScheduled = true
-                                    // 延时 10 秒再下发 true，以模拟后端/风控延迟
-                                    mainHandler.postDelayed({
-                                        try {
-                                            eventCallBack?.sendAppAdsOn(true)
-                                        } catch (e: Exception) {
-                                            Log.w(TAG, "sendAppAdsOn(true) delayed failed", e)
-                                        } finally {
-                                            appAdsProbeScheduled = false
-                                        }
-                                    }, 10_000)
-                                    Log.d(TAG, "app_ads_event: ads enabled -> scheduled app_ads_on(true) after 10s")
-                                } else {
-                                    Log.d(TAG, "app_ads_event: probe already scheduled, ignore duplicate")
-                                }
+                            try {
+                                eventCallBack?.sendAppAdsOn(adsEnabled)
+                                Log.d(TAG, "app_ads_event: report app_ads_on=$adsEnabled to JS")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "sendAppAdsOn($adsEnabled) failed", e)
                             }
                         } catch (e: Exception) {
                             Log.w(TAG, "handling app_ads_event failed", e)
@@ -536,8 +512,9 @@ class GameDataBridge(
             }
             
             val prefs = ctx.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-            val appAdsOn = prefs.getBoolean("ad_consent_enabled", false)
-            
+            // 默认值改为 true：未存储时视为广告功能开启
+            val appAdsOn = prefs.getBoolean("ad_consent_enabled", true)
+
             Log.d(TAG, "广告事件处理: type=$adType, app_ads_on=$appAdsOn, data=${json}")
             
             if (!appAdsOn) {
@@ -573,45 +550,45 @@ class GameDataBridge(
 
             // 根据广告类型调用对应的 AdManager 方法
             mainHandler.post {
-//                try {
-//                    // extract optional message_id for correlation
-//                    val messageId = if (json.has("message_id")) json.optString("message_id") else null
-//                    when (adType.lowercase()) {
-//                        "interstitial" -> {
-//                            Log.d(TAG, "启动插屏广告")
-//                                com.example.gameboxone.ads.AdHostActivity.start(
-//                                    activity,
-//                                    com.example.gameboxone.ads.AdHostActivity.Companion.AdType.INTERSTITIAL,
-//                                    messageId
-//                                )
-//                        }
-//                        "reward" -> {
-//                            Log.d(TAG, "启动激励广告")
-//                                com.example.gameboxone.ads.AdHostActivity.start(
-//                                    activity,
-//                                    com.example.gameboxone.ads.AdHostActivity.Companion.AdType.REWARDED,
-//                                    messageId
-//                                )
-//                        }
-//                        "banner" -> {
-//                            Log.d(TAG, "启动横幅广告")
-//                                com.example.gameboxone.ads.AdManager.loadBanner(activity, messageId)
-//                        }
-//                        "openad" -> {
-//                            Log.d(TAG, "启动开屏广告")
-//                                com.example.gameboxone.ads.AdHostActivity.start(
-//                                    activity,
-//                                    com.example.gameboxone.ads.AdHostActivity.Companion.AdType.APP_OPEN,
-//                                    messageId
-//                                )
-//                        }
-//                        else -> {
-//                            Log.w(TAG, "未知的广告类型: $adType")
-//                        }
-//                    }
-//                } catch (e: Exception) {
-//                    Log.e(TAG, "调用 AdManager 失败: $adType", e)
-//                }
+                try {
+                    // extract optional message_id for correlation
+                    val messageId = if (json.has("message_id")) json.optString("message_id") else null
+                    when (adType.lowercase()) {
+                        "interstitial" -> {
+                            Log.d(TAG, "启动插屏广告")
+                            com.example.gameboxone.ads.AdHostActivity.start(
+                                activity,
+                                com.example.gameboxone.ads.AdHostActivity.Companion.AdType.INTERSTITIAL,
+                                messageId
+                            )
+                        }
+                        "reward", "rewarded" -> {
+                            Log.d(TAG, "启动激励广告")
+                            com.example.gameboxone.ads.AdHostActivity.start(
+                                activity,
+                                com.example.gameboxone.ads.AdHostActivity.Companion.AdType.REWARDED,
+                                messageId
+                            )
+                        }
+                        "banner" -> {
+                            Log.d(TAG, "启动横幅广告")
+                            com.example.gameboxone.ads.AdManager.loadBanner(activity, messageId)
+                        }
+                        "openad", "app_open" -> {
+                            Log.d(TAG, "启动开屏广告")
+                            com.example.gameboxone.ads.AdHostActivity.start(
+                                activity,
+                                com.example.gameboxone.ads.AdHostActivity.Companion.AdType.APP_OPEN,
+                                messageId
+                            )
+                        }
+                        else -> {
+                            Log.w(TAG, "未知的广告类型: $adType")
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "调用 AdManager 失败: $adType", e)
+                }
             }
             
         } catch (e: Exception) {

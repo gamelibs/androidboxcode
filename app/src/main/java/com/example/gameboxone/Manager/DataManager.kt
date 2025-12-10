@@ -519,7 +519,9 @@ class DataManager @Inject constructor(
                         database.appConfigDao().insertConfig(AppConfigItem(name = "sdk_url", value = netManager.getSdkUrl()))
                         database.appConfigDao().insertConfig(AppConfigItem(name = "sdk_file_name", value = netManager.getSdkFileName()))
                         database.appConfigDao().insertConfig(AppConfigItem(name = "remote_sdk_version", value = netManager.getRemoteSdkVersion()))
-                        Log.d(TAG, "已将保底 params 写入 DB (base/sdk_url/sdk_file_name/remote_sdk_version)")
+                        // 新增：缓冲远程 gameConfigUrl，便于后续从 DB 恢复
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "game_config_url", value = netManager.getGameConfigUrl()))
+                        Log.d(TAG, "已将保底 params 写入 DB (base/sdk_url/sdk_file_name/remote_sdk_version/game_config_url)")
                     } catch (e: Exception) {
                         Log.w(TAG, "写入保底 params 到 DB 失败", e)
                     }
@@ -559,10 +561,14 @@ class DataManager @Inject constructor(
 //                return@withContext
 //            }
 
-            // 将 task 字段提取为 taskPointsJson，以便 Room 能持久化
+            // 将 task 字段提取为 taskPointsJson，并规范化 gameRes（使用去空格的游戏名称）
             val configItems = parsedItems.map { item ->
                 val taskJson = item.task?.points?.let { gson.toJson(it) }
-                item.copy(taskPointsJson = taskJson)
+                val normalizedGameRes = item.name.replace(" ", "")
+                item.copy(
+                    gameRes = normalizedGameRes,
+                    taskPointsJson = taskJson
+                )
             }
 
             // 清空旧数据
@@ -619,12 +625,13 @@ class DataManager @Inject constructor(
                     val sdkUrl = configs.find { it.name == "sdk_url" }?.value
                     val sdkFile = configs.find { it.name == "sdk_file_name" }?.value
                     val sdkVersion = configs.find { it.name == "remote_sdk_version" }?.value
+                    val gameConfigUrl = configs.find { it.name == "game_config_url" }?.value
                     // 未来如果需要持久化 gameConfigUrl，可在此读取并传入 applyRemoteParams
 
                     if (!base.isNullOrBlank()) {
                         try {
-                            netManager.applyRemoteParams(null, base, base, sdkUrl, sdkVersion, sdkFile, null)
-                            Log.d(TAG, "applyParamsFromAssets applied from DB: base=$base, sdkUrl=$sdkUrl, sdkFile=$sdkFile, sdkVersion=$sdkVersion")
+                            netManager.applyRemoteParams(null, base, base, sdkUrl, sdkVersion, sdkFile, gameConfigUrl)
+                            Log.d(TAG, "applyParamsFromAssets applied from DB: base=$base, sdkUrl=$sdkUrl, sdkFile=$sdkFile, sdkVersion=$sdkVersion, gameConfigUrl=$gameConfigUrl")
                             effectiveBase = netManager.getBaseUrl()
                         } catch (e: Exception) {
                             Log.w(TAG, "applyParamsFromAssets: applyRemoteParams failed", e)
@@ -900,6 +907,32 @@ class DataManager @Inject constructor(
                             // 成功拉取到远端数据，清除之前的失败提示标志
                             remoteConfigFailureShown.set(false)
 
+                            // 在写入前对比并打印时间戳变更情况（基于 gameId 或 id）
+                            try {
+                                val existing = database.gameConfigDao().getAll()
+                                val byGameId = existing.associateBy { it.gameId }
+                                val byId = existing.associateBy { it.id }
+
+                                configItems.forEach { remote ->
+                                    // 优先使用业务 gameId 作为匹配键，兜底用自增 id
+                                    val keyGameId = remote.gameId
+                                    val local = if (keyGameId.isNotBlank()) {
+                                        byGameId[keyGameId]
+                                    } else {
+                                        byId[remote.id]
+                                    }
+                                    val localTs = local?.timestamp
+                                    val remoteTs = remote.timestamp
+                                    val equal = localTs == remoteTs
+                                    Log.d(
+                                        TAG,
+                                        "[GAMEBOX] 时间戳对比: gameId=$keyGameId, name=${remote.name}, localTs=$localTs, remoteTs=$remoteTs, equal=$equal"
+                                    )
+                                }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "时间戳对比日志打印失败", e)
+                            }
+
                             // 远端返回成功，持久化当前 NetManager 的 params 到 DB，保证后继启动读取一致
                             try {
                                 database.appConfigDao().insertConfig(
@@ -926,9 +959,15 @@ class DataManager @Inject constructor(
                                         value = netManager.getRemoteSdkVersion()
                                     )
                                 )
+                                database.appConfigDao().insertConfig(
+                                    AppConfigItem(
+                                        name = "game_config_url",
+                                        value = netManager.getGameConfigUrl()
+                                    )
+                                )
                                 Log.d(
                                     TAG,
-                                    "已将远端 params 写入 DB (base/sdk_url/sdk_file_name/remote_sdk_version)"
+                                    "已将远端 params 写入 DB (base/sdk_url/sdk_file_name/remote_sdk_version/game_config_url)"
                                 )
                             } catch (e: Exception) {
                                 Log.w(TAG, "写入远端 params 到 DB 失败", e)
@@ -983,6 +1022,7 @@ class DataManager @Inject constructor(
                             val processed = try {
                                 configItems.map { item ->
                                     val taskJson = item.task?.points?.let { Gson().toJson(it) }
+                                    val normalizedGameRes = item.name.replace(" ", "")
                                     GameConfigItem(
                                         id = item.id,
                                         gameId = item.gameId,
@@ -991,7 +1031,8 @@ class DataManager @Inject constructor(
                                         name = item.name,
                                         icon = item.icon,
                                         rating = item.rating,
-                                        gameRes = item.gameRes,
+                                        // 不再直接使用远端 gameRes 字段，而是用去空格的游戏名称作为资源目录名
+                                        gameRes = normalizedGameRes,
                                         info = item.info,
                                         diff = item.diff,
                                         download = item.download,

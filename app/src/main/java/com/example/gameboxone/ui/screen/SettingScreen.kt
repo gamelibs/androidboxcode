@@ -50,6 +50,10 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
     var isSoundEnabled by mutableStateOf(true)
         private set
 
+    // 新增：广告开关（控制 app_ads_on / ad_consent_enabled）
+    var isAdsEnabled by mutableStateOf(true)
+        private set
+
     // 临时存储缓存大小
     private var _cacheSize = MutableStateFlow("计算中...")
     val cacheSize = _cacheSize.asStateFlow()
@@ -57,6 +61,34 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
     init {
         viewModelScope.launch {
             calculateCacheSize()
+        }
+    }
+
+    // 在 Composable 中调用，用于从 SharedPreferences 读取当前广告开关状态
+    fun loadSettings(context: Context) {
+        viewModelScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                // 默认开启广告：默认值为 true
+                val enabled = prefs.getBoolean("ad_consent_enabled", true)
+                isAdsEnabled = enabled
+            } catch (_: Exception) {
+                // 读不到时保持默认 true
+                isAdsEnabled = true
+            }
+        }
+    }
+
+    // 切换广告开关，并写回 SharedPreferences，供 GameDataBridge 使用
+    fun toggleAdsEnabled(context: Context, enabled: Boolean) {
+        isAdsEnabled = enabled
+        viewModelScope.launch {
+            try {
+                val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("ad_consent_enabled", enabled).apply()
+            } catch (_: Exception) {
+                // 忽略持久化异常，保持内存状态
+            }
         }
     }
 
@@ -135,6 +167,11 @@ fun SettingScreen(
     val cacheSize by viewModel.cacheSize.collectAsState()
     val context = LocalContext.current
 
+    // 首次进入设置页时，从 SharedPreferences 加载广告开关状态
+    LaunchedEffect(Unit) {
+        viewModel.loadSettings(context)
+    }
+
     // 对话框状态
     var showClearCacheDialog by remember { mutableStateOf(false) }
     var showAboutDialog by remember { mutableStateOf(false) }
@@ -157,7 +194,7 @@ fun SettingScreen(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // 应用外观设置
+            // 界面设置
             item {
                 SettingSectionHeader(title = "界面设置")
                 SettingsSwitchItem(
@@ -216,6 +253,20 @@ fun SettingScreen(
                     icon = Icons.Default.VolumeUp,
                     checked = viewModel.isSoundEnabled,
                     onCheckedChange = viewModel::toggleSound
+                )
+            }
+
+            // 新增：广告设置
+            item {
+                SettingSectionHeader(title = "广告设置")
+                SettingsSwitchItem(
+                    title = "启用游戏内广告",
+                    description = "控制是否允许展示激励广告、插屏广告等（默认开启）",
+                    icon = Icons.Default.Campaign,
+                    checked = viewModel.isAdsEnabled,
+                    onCheckedChange = { enabled ->
+                        viewModel.toggleAdsEnabled(context, enabled)
+                    }
                 )
             }
 

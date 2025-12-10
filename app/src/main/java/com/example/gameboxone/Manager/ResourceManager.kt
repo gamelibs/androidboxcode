@@ -51,6 +51,24 @@ class ResourceManager @Inject constructor(
             // 打印更多游戏信息用于调试
             Log.d(TAG, "游戏详细信息: ID=${game.id}, 名称=${game.name}, URL=${game.downloadUrl}, gameRes=${game.gameRes}")
 
+            // 点击游戏时，基于版本文件与 patch 打印一次“是否需要更新”的提示日志（仅用于调试）
+            try {
+                val versionFile = File(getLocalCachePath(game.gameRes), ".version")
+                val localVersion = if (versionFile.exists()) {
+                    versionFile.readText().trim().toIntOrNull() ?: 0
+                } else {
+                    null
+                }
+                val remoteVersion = game.patch
+                val needUpdate = localVersion == null || remoteVersion > localVersion
+                Log.d(
+                    TAG,
+                    "点击游戏时版本检查: id=${game.id}, name=${game.name}, localVersion=${localVersion ?: "null"}, remoteVersion=$remoteVersion, needUpdate=$needUpdate"
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "点击游戏时版本检查日志失败: ${game.name}", e)
+            }
+
             // 0. 首先检查游戏的isLocal标记，该标记表示游戏已在某个位置下载完成
             if (game.isLocal && game.localPath != "") {
                 val localPathFile = File(game.localPath)

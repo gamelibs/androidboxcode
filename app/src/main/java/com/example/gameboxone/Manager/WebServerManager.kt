@@ -263,14 +263,26 @@ class WebServerManager @Inject constructor(
                     uri
                 }
 
-                // 如果请求的是 SDK 文件（如 AndroidCp.min.js），统一使用全局 SDK 缓存文件
                 val sdkOverrideFile: File? = try {
                     val sdkPath = sdkManager.getSdkPath()
                     if (sdkPath.isNotBlank()) {
                         val sdkFile = File(sdkPath)
                         val requestedName = requestedPath.substringAfterLast('/')
                         val sdkName = sdkFile.name
-                        if (sdkFile.exists() && requestedName == sdkName) sdkFile else null
+
+                        fun String.baseName(): String =
+                            this.substringAfterLast('/').substringBeforeLast('.')
+
+                        val requestedBase = requestedName.baseName()
+                        val sdkBase = sdkName.baseName()
+
+                        if (sdkFile.exists() &&
+                            (requestedName == sdkName || requestedBase.equals(sdkBase, ignoreCase = true))
+                        ) {
+                            sdkFile
+                        } else {
+                            null
+                        }
                     } else {
                         null
                     }

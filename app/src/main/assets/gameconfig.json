@@ -1,8 +1,8 @@
 {
   "params": {
-    "env": "beta",
+    "env": "release",
     "beta": "http://192.168.1.169:13200",
-    "release": "http://app.gameslog.top/",
+    "release": "https://gameslog.top/",
     "gameConfigUrl":"api/v1/site/sitedata/platform/1018",
     "gameSdkUrl": "api/v1/sdk/templates/AndroidCp/",
     "gameSdkName": "AndroidCp.js",

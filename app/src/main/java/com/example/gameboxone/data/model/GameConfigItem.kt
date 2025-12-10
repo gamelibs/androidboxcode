@@ -3,6 +3,7 @@ package com.example.gameboxone.data.model
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 import androidx.room.Ignore
+import com.google.gson.annotations.SerializedName
 
 /**
  * 游戏数据实体类
@@ -12,7 +13,8 @@ import androidx.room.Ignore
 data class GameConfigItem(
     @PrimaryKey(autoGenerate = true)
     val id: Int = 0,                      // 游戏ID
-    val gameId: String = "",              // 游戏业务ID
+    @SerializedName("gameid")
+    val gameId: String = "",              // 游戏业务ID（JSON中字段名为 gameid）
     val pubId: Int = 0,                   // 发布者ID
     val ret: Int = 0,                     // 状态码
     val name: String = "",                // 游戏名称

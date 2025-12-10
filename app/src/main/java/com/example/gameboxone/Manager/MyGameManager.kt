@@ -13,6 +13,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -46,7 +49,107 @@ class MyGameManager @Inject constructor(
      * @return 已安装游戏列表
      */
     suspend fun getAllGames(): List<Custom.MyGameData> = withContext(Dispatchers.IO) {
-        return@withContext myGameDao.getAllGamesList().map { mapToMyGameData(it) }
+        val localItems = myGameDao.getAllGamesList()
+        if (localItems.isEmpty()) return@withContext emptyList()
+
+        // 按业务 gameId 从 game_config 中建立远程配置索引
+        val remoteConfigByGameId: Map<String, GameConfigItem> = try {
+            database.gameConfigDao().getAll().associateBy { it.gameId }
+        } catch (e: Exception) {
+            Log.w(TAG, "获取远程配置用于我的游戏 hasUpdate 计算失败", e)
+            emptyMap()
+        }
+
+        // 映射为 MyGameData，并在这里写好 hasUpdate，供 UI 激活“更新”按钮
+        return@withContext localItems.map { item ->
+            val base = mapToMyGameData(item)
+            val remote = remoteConfigByGameId[item.gameId]
+
+            // 计算是否有更新：patch 或 timestamp 更大
+            val hasUpdate = if (remote == null) {
+                false
+            } else {
+                val patchNewer = remote.patch > item.patch
+                val tsNewer = try {
+                    val remoteTs = remote.timestamp
+                    val remoteMillis = remoteTs?.let { parseRemoteTimestampToMillis(it) }
+                    val localInstallMillis = item.installTime
+                    remoteMillis != null && remoteMillis > localInstallMillis
+                } catch (_: Exception) {
+                    false
+                }
+                val result = patchNewer || tsNewer
+                Log.d(
+                    TAG,
+                    "[GAMEBOX] 我的游戏 hasUpdate 计算: gameId=${item.gameId}, name=${item.name}, " +
+                        "localInstall=${item.installTime}, remoteTs=${remote?.timestamp}, " +
+                        "patchNewer=$patchNewer, tsNewer=$tsNewer, hasUpdate=$result"
+                )
+                result
+            }
+
+            // 如果远程配置里有更准确的 size（单位为 KB），则转成 MB 文本覆盖展示用数据
+            val finalSize = remote?.size
+                ?.takeIf { it.isNotBlank() }
+                ?.let { formatSizeMbFromKbString(it) }
+                ?: base.size
+
+            // 使用远程 downicon/icon 生成完整图标 URL，覆盖本地安装时写入的占位 icon
+            val finalIconUrl = try {
+                when {
+                    remote?.downicon?.isNotBlank() == true ->
+                        netManager.resolveResourceUrl(remote.downicon.trimStart('/'))
+                    remote?.icon?.isNotBlank() == true ->
+                        netManager.resolveResourceUrl(remote.icon.trimStart('/'))
+                    else -> base.iconUrl
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "解析远程图标 URL 失败: gameId=${item.gameId}", e)
+                base.iconUrl
+            }
+
+            base.copy(
+                hasUpdate = hasUpdate,
+                size = finalSize,
+                iconUrl = finalIconUrl
+            )
+        }
+    }
+
+    /**
+     * 解析远程返回的 ISO8601 时间戳为毫秒时间
+     * 示例格式：2025-12-10T02:50:23.999Z
+     */
+    private fun parseRemoteTimestampToMillis(timestamp: String): Long? {
+        return try {
+            val formatter = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSS'Z'", Locale.US).apply {
+                timeZone = TimeZone.getTimeZone("UTC")
+            }
+            formatter.parse(timestamp)?.time
+        } catch (e: Exception) {
+            Log.w(TAG, "解析远程时间戳失败: $timestamp", e)
+            null
+        }
+    }
+
+    /**
+     * 将远程返回的 size（单位：KB）格式化为用于展示的 MB 字符串
+     * 例如: "1659475" -> "1621" 或 "1621.0"
+     */
+    private fun formatSizeMbFromKbString(size: String): String {
+        return try {
+            val kb = size.trim().toLong()
+            val mb = kb.toDouble() / 1024.0
+            // 大于 10MB 显示整数，小于则保留一位小数
+            if (mb >= 10) {
+                String.format(Locale.US, "%.0f", mb)
+            } else {
+                String.format(Locale.US, "%.1f", mb)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "解析远程 size 失败, 原值保持不变: $size", e)
+            size
+        }
     }
 
     /**
@@ -76,8 +179,10 @@ class MyGameManager @Inject constructor(
      */
     suspend fun addGame(game: GameConfigItem, localPath: String): Boolean = withContext(Dispatchers.IO) {
         try {
+            // 统一使用业务 gameId（远程 JSON 的 gameid），如果为空再退回 id
+            val bizGameId = game.gameId.ifBlank { game.id.toString() }
             val myGame = MyGameItem(
-                gameId = game.id.toString(),
+                gameId = bizGameId,
                 name = game.name,
                 icon = game.icon,
                 gameRes = game.gameRes,
@@ -87,13 +192,13 @@ class MyGameManager @Inject constructor(
                 patch = game.patch,
                 size = game.size ?: "未知"
             )
-            
+
             myGameDao.insert(myGame)
-            Log.d(TAG, "游戏添加成功: ${game.name}")
-            
+            Log.d(TAG, "游戏添加成功: ${game.name}, gameId=$bizGameId")
+
             // 发送游戏安装成功事件
-            eventManager.emitGameEvent(GameEvent.GameInstalled(game.id.toString()))
-            
+            eventManager.emitGameEvent(GameEvent.GameInstalled(bizGameId))
+
             return@withContext true
         } catch (e: Exception) {
             Log.e(TAG, "添加游戏到我的游戏失败: ${game.name}", e)
@@ -111,18 +216,18 @@ class MyGameManager @Inject constructor(
     suspend fun updateGame(gameId: String, newLocalPath: String, newPatch: Int): Boolean = withContext(Dispatchers.IO) {
         try {
             val existingGame = myGameDao.getGameById(gameId) ?: return@withContext false
-            
+
             val updatedGame = existingGame.copy(
                 localPath = newLocalPath,
                 patch = newPatch
             )
-            
+
             myGameDao.update(updatedGame)
             Log.d(TAG, "游戏更新成功: ${existingGame.name}, 新补丁版本: $newPatch")
-            
+
             // 发送游戏更新成功事件
             eventManager.emitGameEvent(GameEvent.GameUpdated(gameId))
-            
+
             return@withContext true
         } catch (e: Exception) {
             Log.e(TAG, "更新游戏失败: $gameId", e)
@@ -139,18 +244,18 @@ class MyGameManager @Inject constructor(
         try {
             // 获取游戏信息
             val game = myGameDao.getGameById(gameId) ?: return@withContext false
-            
+
             // 删除游戏文件
             resourceManager.deleteGameFiles(game.localPath)
-            
+
             // 从数据库中删除
             myGameDao.deleteById(gameId)
-            
+
             Log.d(TAG, "游戏删除成功: ${game.name}")
-            
+
             // 发送游戏删除成功事件
             eventManager.emitGameEvent(GameEvent.GameUninstalled(gameId))
-            
+
             return@withContext true
         } catch (e: Exception) {
             Log.e(TAG, "删除游戏失败: $gameId", e)
@@ -175,11 +280,11 @@ class MyGameManager @Inject constructor(
                 val existingGame = myGameDao.getGameById(game.id)
                 return@withContext Result.success(existingGame?.localPath ?: "")
             }
-            
+
             // 尝试的顺序：1. 网络下载  2. 本地资源
             var installPath: String? = null
             var installError: Exception? = null
-            
+
             // 1. 尝试从网络下载
             if (game.downloadUrl.isNotBlank() && game.downloadUrl.startsWith("http")) {
                 try {
@@ -191,7 +296,7 @@ class MyGameManager @Inject constructor(
                         targetPath = downloadInfo.targetPath,
                         onProgress = onProgress
                     )
-                    
+
                     if (downloadResult.isSuccess) {
                         installPath = downloadResult.getOrThrow()
                         Log.d(TAG, "网络下载成功: ${game.name}")
@@ -206,7 +311,7 @@ class MyGameManager @Inject constructor(
             } else {
                 Log.d(TAG, "URL无效或为空，跳过网络下载: ${game.downloadUrl}")
             }
-            
+
             // 2. 如果网络下载失败，尝试从本地资源获取
             if (installPath == null) {
                 try {
@@ -215,7 +320,7 @@ class MyGameManager @Inject constructor(
                         gameId = game.id,
                         gameRes = game.gameRes
                     )
-                    
+
                     if (extractResult.isSuccess) {
                         installPath = extractResult.getOrThrow()
                         Log.d(TAG, "本地资源提取成功: ${game.name}")
@@ -233,7 +338,7 @@ class MyGameManager @Inject constructor(
                     Log.e(TAG, "本地资源提取异常: ${game.name}", e)
                 }
             }
-            
+
             // 3. 如果安装路径存在，创建数据库记录
             if (installPath != null) {
                 try {
@@ -250,16 +355,16 @@ class MyGameManager @Inject constructor(
                         size = game.size ?: "未知大小",
                         installTime = System.currentTimeMillis()
                     )
-                    
+
                     // 保存到数据库
                     myGameDao.insert(myGameItem)
-                    
+
                     // 同时更新GameConfig表
                     updateGameConfig(game.id, installPath, true)
-                    
+
                     // 发送安装成功事件
                     eventManager.emitGameEvent(GameEvent.GameInstalled(game.id))
-                    
+
                     Log.d(TAG, "游戏安装成功: ${game.name}, 路径: $installPath")
                     return@withContext Result.success(installPath)
                 } catch (e: Exception) {
@@ -289,10 +394,10 @@ class MyGameManager @Inject constructor(
     suspend fun installGameFromBackup(game: Custom.HotGameData): Result<String> = withContext(Dispatchers.IO) {
         try {
             Log.d(TAG, "正在从备份目录安装游戏: ${game.name}")
-            
+
             // 1. 从资源管理器加载游戏文件 - 纯资源操作
             val loadResult = resourceManager.loadFromBackupDirectory(game)
-            
+
             // 2. 资源加载成功后，更新数据库
             loadResult.fold(
                 onSuccess = { localPath ->
@@ -309,7 +414,7 @@ class MyGameManager @Inject constructor(
                         size = "从本地资源加载",
                         installTime = System.currentTimeMillis()
                     )
-                    
+
                     // 更新数据库和发送事件
                     try {
                         // 检查是否已存在
@@ -329,15 +434,15 @@ class MyGameManager @Inject constructor(
                             myGameDao.insert(myGameItem)
                             Log.d(TAG, "添加新游戏记录: ${game.name}")
                         }
-                        
+
                         // 同时更新GameConfig表中的记录
                         updateGameConfig(game.id, localPath, true)
-                        
+
                         // 发送安装成功事件
                         eventManager.emitGameEvent(GameEvent.GameInstalled(game.id))
-                        
+
                         Log.d(TAG, "游戏从备份目录安装成功: ${game.name}")
-                        
+
                     } catch (e: Exception) {
                         Log.e(TAG, "更新数据库失败: ${game.name}", e)
                         // 资源已提取，但数据库更新失败，回滚删除资源
@@ -350,7 +455,7 @@ class MyGameManager @Inject constructor(
                     return@withContext Result.failure(error)
                 }
             )
-            
+
             return@withContext loadResult
         } catch (e: Exception) {
             Log.e(TAG, "从备份目录安装游戏失败: ${game.name}", e)
@@ -386,30 +491,28 @@ class MyGameManager @Inject constructor(
      */
     suspend fun checkForUpdate(gameId: String): Boolean = withContext(Dispatchers.IO) {
         try {
-            // 获取本地游戏数据
+            // 仅基于本地 my_games 与 game_config 中的 patch/timestamp 对比，避免直接调用不存在的 getGameIdInfo 接口
             val localGame = myGameDao.getGameById(gameId) ?: return@withContext false
             val localPatch = localGame.patch
-            
-            // 从网络获取最新补丁版本
-            val latestPatch = try {
-                val latestGameInfo = netManager.getGameIdInfo(gameId).toString() // 显式转换为字符串
-                if (latestGameInfo.isNotBlank()) {
-                    latestGameInfo.toInt()
-                } else {
-                    // 如果网络请求返回为空，则保持本地版本不变
-                    localPatch
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "获取游戏最新版本失败: $gameId", e)
-                localPatch // 出错时使用本地版本
+
+            // 从 game_config 表中获取对应的远程配置（已经是最新合并结果）
+            val configGame = database.gameConfigDao().getGameById(gameId)
+            if (configGame == null) {
+                // 配置表中不存在该游戏，无法判断更新，视为无更新
+                Log.d(TAG, "checkForUpdate: gameId=$gameId 在 game_config 中不存在，视为无更新")
+                return@withContext false
             }
-            
-            // 简单比较版本，如果网络版本大于本地版本则需要更新
-            val hasUpdate = latestPatch > localPatch
+
+            val remotePatch = configGame.patch ?: localPatch
+
+            // 使用 patch 进行简单比较；后续如果你改为用 timestamp，对这里做相应调整即可
+            val hasUpdate = remotePatch > localPatch
             if (hasUpdate) {
-                Log.d(TAG, "游戏有更新: ${localGame.name}, 本地版本: $localPatch, 最新版本: $latestPatch")
+                Log.d(TAG, "游戏有更新: ${localGame.name}, 本地补丁版本=$localPatch, 远端补丁版本=$remotePatch")
+            } else {
+                Log.d(TAG, "游戏无更新: ${localGame.name}, 本地补丁版本=$localPatch, 远端补丁版本=$remotePatch")
             }
-            
+
             return@withContext hasUpdate
         } catch (e: Exception) {
             Log.e(TAG, "检查游戏更新失败: $gameId", e)
@@ -470,8 +573,10 @@ class MyGameManager @Inject constructor(
      * 统一的数据模型转换方法 - GameConfigItem 转 MyGameItem
      */
     private fun convertGameConfigToMyGame(config: GameConfigItem, localPath: String): MyGameItem {
+        // 之前这里用的是 config.id.toString()，会造成与远程 gameId 不一致
+        val bizGameId = config.gameId.ifBlank { config.id.toString() }
         return MyGameItem(
-            gameId = config.id.toString(),
+            gameId = bizGameId,
             name = config.name,
             icon = config.icon,
             gameRes = config.gameRes ?: "",
@@ -505,7 +610,7 @@ class MyGameManager @Inject constructor(
                 updateGamePlayInfo(gameId)
                 return@withContext true
             }
-            
+
             // 创建新的游戏记录
             val myGame = MyGameItem(
                 gameId = gameId,
@@ -521,20 +626,20 @@ class MyGameManager @Inject constructor(
                 lastPlayTime = System.currentTimeMillis(),
                 playCount = 1
             )
-            
+
             myGameDao.insert(myGame)
             Log.d(TAG, "游戏添加成功: $name")
-            
+
             // 发送游戏安装成功事件
             eventManager.emitGameEvent(GameEvent.GameInstalled(gameId))
-            
+
             return@withContext true
         } catch (e: Exception) {
             Log.e(TAG, "添加游戏到我的游戏失败: $name", e)
             return@withContext false
         }
     }
-    
+
     /**
      * 更新游戏播放信息
      * 更新最后播放时间和播放次数

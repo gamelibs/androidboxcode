@@ -9,6 +9,7 @@ import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.manager.MyGameManager
+import com.example.gameboxone.base.AppDatabase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,7 +22,8 @@ private const val TAG = "MyGameViewModel"
 @HiltViewModel
 class MyGameViewModel @Inject constructor(
     private val myGameManager: MyGameManager,
-    private val eventManager: EventManager
+    private val eventManager: EventManager,
+    private val database: AppDatabase
 ) : ViewModel() {
     // UI 状态
     private val _uiState = MutableStateFlow(MyGameState())
@@ -43,11 +45,16 @@ class MyGameViewModel @Inject constructor(
                     is DataEvent.RefreshStarted -> {
                         _uiState.value = _uiState.value.copy(isLoading = true)
                     }
-                    is DataEvent.RefreshCompleted, is DataEvent.Initialized -> {
-                        // 仅当未加载时才重新加载数据
+                    is DataEvent.Initialized -> {
+                        // 首次初始化时仍然遵守“仅当未加载时才加载”的约束
                         if (!isDataLoaded) {
                             loadGameData()
                         }
+                    }
+                    is DataEvent.RefreshCompleted -> {
+                        // 远程刷新完成后，必须重新加载“我的游戏”以重新计算 hasUpdate
+                        isDataLoaded = false
+                        loadGameData()
                     }
                     is DataEvent.Error -> {
                         _uiState.value = _uiState.value.copy(
@@ -80,21 +87,12 @@ class MyGameViewModel @Inject constructor(
                 Log.d(TAG, "开始加载已安装游戏数据...")
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-                // 从MyGameManager获取游戏数据
+                // 这里直接使用 MyGameManager.getAllGames()，它已经根据远程 game_config 写好了 hasUpdate 状态
                 val installedGames = myGameManager.getAllGames()
                 Log.d(TAG, "已安装游戏数量: ${installedGames.size}个")
 
-                // 检查每个已安装游戏是否有更新
-                val gamesWithUpdateInfo = installedGames.map { game ->
-                    // 检查游戏更新状态
-                    val hasUpdate = myGameManager.checkForUpdate(game.id)
-                    
-                    // 将更新状态添加到游戏数据中
-                    game.copy(hasUpdate = hasUpdate)
-                }
-
                 _uiState.value = _uiState.value.copy(
-                    games = gamesWithUpdateInfo,
+                    games = installedGames,
                     isLoading = false
                 )
 

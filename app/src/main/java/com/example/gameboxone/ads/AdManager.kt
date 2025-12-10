@@ -6,6 +6,7 @@ import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import android.provider.Settings
 import android.util.Log
+import androidx.appcompat.app.AlertDialog
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.FullScreenContentCallback
@@ -175,7 +176,16 @@ object AdManager {
      * 检查是否可以显示广告
      */
     fun canShowAds(): Boolean {
-    return enableAdsGate && isInitialized && (canRequestAds || (allowTestAdsWithoutConsent && isInitialized))
+        val gate = enableAdsGate
+        val initOk = isInitialized
+        val consentOk = canRequestAds
+        val testOverrideOk = allowTestAdsWithoutConsent && isInitialized
+        val result = gate && initOk && (consentOk || testOverrideOk)
+        Log.d(
+            TAG,
+            "canShowAds: gate=$gate, isInitialized=$initOk, canRequestAds=$consentOk, allowTestAdsWithoutConsent=$allowTestAdsWithoutConsent, result=$result"
+        )
+        return result
     }
 
     private fun isAdFresh(loadTime: Long) =
@@ -192,10 +202,17 @@ object AdManager {
 
     // --- Interstitial ---
     fun loadInterstitial(context: Context) {
-        if (!canRequestAds && !allowTestAdsWithoutConsent) return
-        if (interstitial != null && isAdFresh(interstitialLoadTime)) return
+        if (!canRequestAds && !allowTestAdsWithoutConsent) {
+            Log.d(TAG, "loadInterstitial: skip — canRequestAds=$canRequestAds, allowTestAdsWithoutConsent=$allowTestAdsWithoutConsent")
+            return
+        }
+        if (interstitial != null && isAdFresh(interstitialLoadTime)) {
+            Log.d(TAG, "loadInterstitial: existing interstitial is fresh, skip reload")
+            return
+        }
         val request = AdRequest.Builder().build()
         val unitId = interstitialUnitOverride ?: INTERSTITIAL_AD_UNIT
+        Log.d(TAG, "loadInterstitial: using adUnitId=$unitId")
         InterstitialAd.load(context, unitId, request, object : InterstitialAdLoadCallback() {
             override fun onAdLoaded(ad: InterstitialAd) {
                 interstitial = ad
@@ -256,6 +273,22 @@ object AdManager {
         if (!canShowAds()) {
             Log.d(TAG, "showAppOpen: 无法显示广告 - 广告未初始化或用户未同意")
             try { AdGameEventBridge.adError("appopen_not_allowed", messageId) } catch (_: Exception) {}
+            // 弹出提示对话框：广告环境未就绪
+            try {
+                activity.runOnUiThread {
+                    try {
+                        AlertDialog.Builder(activity)
+                            .setTitle("广告启动失败")
+                            .setMessage("广告环境未就绪，无法显示开屏广告，请检查网络或设备的 Google 服务。")
+                            .setPositiveButton("知道了", null)
+                            .show()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "showAppOpen: failed to show failure dialog", e)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "showAppOpen: runOnUiThread failed when showing failure dialog", e)
+            }
             onClosed?.invoke(); return
         }
         if (isShowing || appOpenAd == null || !isAdFresh(appOpenLoadTime)) {
@@ -295,12 +328,36 @@ object AdManager {
     }
 
     fun showInterstitial(activity: Activity, messageId: String? = null, onShown: (() -> Unit)? = null, onClosed: ((Boolean) -> Unit)? = null) {
+        Log.d(
+            TAG,
+            "showInterstitial() called; canShowAds=${canShowAds()}, isShowing=$isShowing, interstitialPresent=${interstitial != null}, isFresh=${isAdFresh(interstitialLoadTime)}"
+        )
         if (!canShowAds()) {
             Log.d(TAG, "showInterstitial: 无法显示广告 - 广告未初始化或用户未同意")
             try { AdGameEventBridge.adError("interstitial_not_allowed", messageId) } catch (_: Exception) {}
+            // 弹出提示对话框：广告环境未就绪
+            try {
+                activity.runOnUiThread {
+                    try {
+                        AlertDialog.Builder(activity)
+                            .setTitle("广告启动失败")
+                            .setMessage("广告环境未就绪，无法显示插屏广告，请检查网络或设备的 Google 服务。")
+                            .setPositiveButton("知道了", null)
+                            .show()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "showInterstitial: failed to show failure dialog", e)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "showInterstitial: runOnUiThread failed when showing failure dialog", e)
+            }
             onClosed?.invoke(false); return
         }
         if (isShowing || interstitial == null || !isAdFresh(interstitialLoadTime)) {
+            Log.d(
+                TAG,
+                "showInterstitial: ad not ready — isShowing=$isShowing, interstitial=${interstitial != null}, isFresh=${isAdFresh(interstitialLoadTime)}"
+            )
             try { AdGameEventBridge.adError("interstitial_not_ready", messageId) } catch (_: Exception) {}
             onClosed?.invoke(false); loadInterstitial(activity.applicationContext); return
         }
@@ -324,10 +381,17 @@ object AdManager {
 
     // --- Rewarded ---
     fun loadRewarded(context: Context) {
-        if (!canRequestAds && !allowTestAdsWithoutConsent) return
-        if (rewardedAd != null && isAdFresh(rewardedLoadTime)) return
+        if (!canRequestAds && !allowTestAdsWithoutConsent) {
+            Log.d(TAG, "loadRewarded: skip — canRequestAds=$canRequestAds, allowTestAdsWithoutConsent=$allowTestAdsWithoutConsent")
+            return
+        }
+        if (rewardedAd != null && isAdFresh(rewardedLoadTime)) {
+            Log.d(TAG, "loadRewarded: existing rewarded ad is fresh, skip reload")
+            return
+        }
         val request = AdRequest.Builder().build()
         val unitId = rewardedUnitOverride ?: REWARDED_AD_UNIT
+        Log.d(TAG, "loadRewarded: using adUnitId=$unitId")
         RewardedAd.load(context, unitId, request, object : RewardedAdLoadCallback() {
             override fun onAdLoaded(ad: RewardedAd) { rewardedAd = ad; rewardedLoadTime = SystemClock.elapsedRealtime(); Log.d(TAG, "rewarded loaded") }
             override fun onAdFailedToLoad(loadAdError: LoadAdError) {
@@ -345,6 +409,22 @@ object AdManager {
         if (!canShowAds()) {
             Log.d(TAG, "showRewarded: 无法显示广告 - 广告未初始化或用户未同意")
             try { AdGameEventBridge.adError("rewarded_not_allowed", messageId) } catch (_: Exception) {}
+            // 弹出提示对话框：广告环境未就绪
+            try {
+                activity.runOnUiThread {
+                    try {
+                        AlertDialog.Builder(activity)
+                            .setTitle("广告启动失败")
+                            .setMessage("广告环境未就绪，无法显示激励广告，请检查网络或设备的 Google 服务。")
+                            .setPositiveButton("知道了", null)
+                            .show()
+                    } catch (e: Exception) {
+                        Log.w(TAG, "showRewarded: failed to show failure dialog", e)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "showRewarded: runOnUiThread failed when showing failure dialog", e)
+            }
             onClosed?.invoke(false); return
         }
         if (isShowing || rewardedAd == null || !isAdFresh(rewardedLoadTime)) {

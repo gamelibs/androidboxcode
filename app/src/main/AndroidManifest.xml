@@ -82,6 +82,13 @@
             android:hardwareAccelerated="true"
             android:theme="@style/Theme.AppCompat.NoActionBar" />
 
+        <!-- 全屏广告承载页，用于展示插屏/激励/开屏广告 -->
+        <activity
+            android:name=".ads.AdHostActivity"
+            android:exported="false"
+            android:hardwareAccelerated="true"
+            android:theme="@style/Theme.AppCompat.NoActionBar" />
+
         <!-- 添加崩溃处理活动 -->
         <activity
             android:name=".ui.CrashHandlerActivity"
