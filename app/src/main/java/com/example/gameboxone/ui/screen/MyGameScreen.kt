@@ -27,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SportsEsports
@@ -104,7 +105,7 @@ fun MyGameScreen(
     }
 
     Scaffold(
-        topBar = { MyGameTopBar() },
+        topBar = { com.example.gameboxone.ui.component.AppTopBar(title = null) },
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
     ) { innerPadding ->
         Box(
@@ -123,6 +124,7 @@ fun MyGameScreen(
                     downloadingGameId = uiState.downloadingGameId,
                     downloadProgress = uiState.downloadProgress,
                     deletingGameId = uiState.deletingGameId,
+                    onPlay = { viewModel.playGame(it) },
                     onDownload = { viewModel.downloadGame(it) },
                     onUpdate = { viewModel.updateGame(it) },
                     onDelete = { viewModel.deleteGame(it) }
@@ -182,6 +184,7 @@ fun GameList(
     downloadingGameId: String?,
     downloadProgress: Float,
     deletingGameId: String?,
+    onPlay: (Custom.MyGameData) -> Unit,
     onDownload: (Custom.MyGameData) -> Unit,
     onUpdate: (Custom.MyGameData) -> Unit,
     onDelete: (Custom.MyGameData) -> Unit
@@ -196,6 +199,7 @@ fun GameList(
                 isDownloading = game.id == downloadingGameId,
                 downloadProgress = if (game.id == downloadingGameId) downloadProgress else 0f,
                 isDeleting = game.id == deletingGameId,
+                onPlay = { onPlay(game) },
                 onDownload = { onDownload(game) },
                 onUpdate = { onUpdate(game) },
                 onDelete = { onDelete(game) }
@@ -299,20 +303,13 @@ private fun GameCard(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun MyGameTopBar() {
-    TopAppBar(
-        title = { Text("我的已安装游戏") }
-    )
-}
-
 @Composable
 fun GameItemCard(
     game: Custom.MyGameData,
     isDownloading: Boolean,
     downloadProgress: Float,
     isDeleting: Boolean,
+    onPlay: () -> Unit,
     onDownload: () -> Unit,
     onUpdate: () -> Unit,
     onDelete: () -> Unit
@@ -330,226 +327,198 @@ fun GameItemCard(
             containerColor = MaterialTheme.colorScheme.surface
         )
     ) {
-        Column {
-            // 游戏信息部分 - 重新设计布局
-            Row(
+        Box(modifier = Modifier.fillMaxWidth()) {
+            // 左上角删除 X 按钮
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(4.dp)
+                    .size(20.dp)
+                    .background(
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f),
+                        shape = CircleShape
+                    )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "删除游戏",
+                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically
+                    .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 12.dp)
             ) {
-                // 游戏图标 - 优化图片加载处理
-                Box(
-                    modifier = Modifier
-                        .size(60.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                // 游戏信息部分
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    if (game.iconUrl.isNotBlank()) {
-                        AsyncImage(
-                            model = ImageRequest.Builder(LocalContext.current)
-                                .data(game.iconUrl)
-                                .crossfade(true)
-                                .placeholder(R.drawable.ic_game_default) // 添加占位图
-                                .error(R.drawable.ic_game_default) // 添加错误图
-                                .fallback(R.drawable.ic_game_default) // 添加备用图
-                                .build(),
-                            contentDescription = game.name,
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Crop,
-                            error = painterResource(id = R.drawable.ic_game_default),
-                            placeholder = painterResource(id = R.drawable.ic_game_default),
-                            fallback = painterResource(id = R.drawable.ic_game_default)
+                    // 游戏图标
+                    Box(
+                        modifier = Modifier
+                            .size(60.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    ) {
+                        if (game.iconUrl.isNotBlank()) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(LocalContext.current)
+                                    .data(game.iconUrl)
+                                    .crossfade(true)
+                                    .placeholder(R.drawable.ic_game_default)
+                                    .error(R.drawable.ic_game_default)
+                                    .fallback(R.drawable.ic_game_default)
+                                    .build(),
+                                contentDescription = game.name,
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Crop,
+                                error = painterResource(id = R.drawable.ic_game_default),
+                                placeholder = painterResource(id = R.drawable.ic_game_default),
+                                fallback = painterResource(id = R.drawable.ic_game_default)
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_game_default),
+                                contentDescription = "默认游戏图标",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
+
+                        if (game.isLocal) {
+                            Box(
+                                modifier = Modifier
+                                    .size(18.dp)
+                                    .align(Alignment.BottomEnd)
+                                    .clip(CircleShape)
+                                    .background(MaterialTheme.colorScheme.primary)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.SportsEsports,
+                                    contentDescription = "已安装",
+                                    tint = Color.White,
+                                    modifier = Modifier
+                                        .size(12.dp)
+                                        .align(Alignment.Center)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    // 中间：名称 + 大小
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = game.name,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
-                    } else {
-                        // 当URL为空时直接使用默认图标
-                        Image(
-                            painter = painterResource(id = R.drawable.ic_game_default),
-                            contentDescription = "默认游戏图标",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
+
+                        Text(
+                            text = "${game.size}MB",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                            modifier = Modifier.padding(top = 4.dp)
                         )
                     }
 
-                    // 显示本地标记
-                    if (game.isLocal) {
-                        Box(
+                    // 右侧：单一主按钮（启动 / 更新 / 下载）
+                    val primaryText: String
+                    val primaryAction: () -> Unit
+
+                    when {
+                        isDownloading -> {
+                            primaryText = "下载中"
+                            primaryAction = {}
+                        }
+                        game.isLocal && game.hasUpdate -> {
+                            primaryText = "更新"
+                            primaryAction = onUpdate
+                        }
+                        game.isLocal -> {
+                            primaryText = "启动"
+                            primaryAction = onPlay
+                        }
+                        else -> {
+                            primaryText = "下载"
+                            primaryAction = onDownload
+                        }
+                    }
+
+                    Button(
+                        onClick = primaryAction,
+                        enabled = !isDownloading,
+                        modifier = Modifier.padding(start = 12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Text(primaryText)
+                    }
+                }
+
+                // 下载进度条
+                AnimatedVisibility(
+                    visible = isDownloading,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 8.dp)
+                    ) {
+                        LinearProgressIndicator(
+                            progress = animatedProgress,
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
+                        Row(
                             modifier = Modifier
-                                .size(18.dp)
-                                .align(Alignment.BottomEnd)
-                                .clip(CircleShape)
-                                .background(MaterialTheme.colorScheme.primary)
+                                .fillMaxWidth()
+                                .padding(top = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.SportsEsports,
-                                contentDescription = "已安装",
-                                tint = Color.White,
-                                modifier = Modifier
-                                    .size(12.dp)
-                                    .align(Alignment.Center)
+                            Text(
+                                text = "下载中 ${(animatedProgress * 100).toInt()}%",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.primary
                             )
                         }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(16.dp))
-
-                // 游戏信息区域 - 占据剩余空间
-                Column(modifier = Modifier.weight(1f)) {
-                    // 游戏名称
-                    Text(
-                        text = game.name,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 16.sp,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    
-                    // 版本和大小信息
-                    Row(
-                        modifier = Modifier.padding(top = 4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "v${game.patch}",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            text = "${game.size}MB",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-
-                // 操作按钮区域 - 根据状态显示不同按钮组合
-                Row(
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                // 删除中的提示保持不变
+                AnimatedVisibility(
+                    visible = isDeleting,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
-                    when {
-                        // 下载中状态
-                        isDownloading -> {
-                            IconButton(onClick = onDelete) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "取消",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        }
-                        // 已安装有更新状态
-                        game.isLocal && game.hasUpdate -> {
-                            Button(
-                                onClick = onUpdate,
-                                modifier = Modifier.padding(end = 8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Text("更新")
-                            }
-                            OutlinedButton(
-                                onClick = onDelete,
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("删除")
-                            }
-                        }
-                        // 已安装无更新状态
-                        game.isLocal -> {
-                            Button(
-                                onClick = { /* 启动游戏 */ },
-                                modifier = Modifier.padding(end = 8.dp),
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Text("启动")
-                            }
-                            OutlinedButton(
-                                onClick = onDelete,
-                                colors = ButtonDefaults.outlinedButtonColors(
-                                    contentColor = MaterialTheme.colorScheme.error
-                                )
-                            ) {
-                                Text("删除")
-                            }
-                        }
-                        // 未安装状态
-                        else -> {
-                            Button(
-                                onClick = onDownload,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = MaterialTheme.colorScheme.primary
-                                )
-                            ) {
-                                Text("下载")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // 下载进度条 - 保留原有功能
-            AnimatedVisibility(
-                visible = isDownloading,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp)
-                ) {
-                    LinearProgressIndicator(
-                        progress = animatedProgress,
-                        modifier = Modifier.fillMaxWidth(),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4.dp),
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(16.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "下载中 ${(animatedProgress * 100).toInt()}%",
-                            fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.primary
+                            text = "正在删除...",
+                            fontSize = 14.sp,
+                            color = MaterialTheme.colorScheme.error
                         )
                     }
-                }
-            }
-
-            // 删除确认提示 - 保留原有功能
-            AnimatedVisibility(
-                visible = isDeleting,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "正在删除...",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.error
-                    )
                 }
             }
         }

@@ -20,6 +20,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -31,7 +32,10 @@ import javax.inject.Inject
  * 设置页面ViewModel
  */
 @HiltViewModel
-class SettingsViewModel @Inject constructor() : ViewModel() {
+class SettingsViewModel @Inject constructor(
+    @ApplicationContext private val appContext: Context
+) : ViewModel() {
+    private val TAG = "SettingsViewModel"
 
     // UI状态
     private val _uiState = MutableStateFlow(SettingsUiState())
@@ -86,6 +90,7 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
             try {
                 val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
                 prefs.edit().putBoolean("ad_consent_enabled", enabled).apply()
+                com.example.gameboxone.AppLog.d(TAG, "切换广告开关: enabled=$enabled")
             } catch (_: Exception) {
                 // 忽略持久化异常，保持内存状态
             }
@@ -97,7 +102,18 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
      */
     fun toggleDarkMode(enabled: Boolean) {
         isDarkMode = enabled
-        // 实际项目中，这里需要保存设置并应用主题
+        viewModelScope.launch {
+            try {
+                val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("dark_mode_enabled", enabled).apply()
+                com.example.gameboxone.AppLog.d(TAG, "切换深色模式: enabled=$enabled")
+
+                // 同步到全局 ThemeManager，立刻触发主题重绘
+                com.example.gameboxone.ui.theme.ThemeManager.setDarkTheme(enabled)
+            } catch (e: Exception) {
+                com.example.gameboxone.AppLog.e(TAG, "保存深色模式设置失败", e)
+            }
+        }
     }
 
     /**
@@ -105,7 +121,14 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
      */
     fun toggleWifiDownload(enabled: Boolean) {
         isWifiOnlyDownload = enabled
-        // 实际项目中，这里需要保存设置
+        // 持久化到 SharedPreferences，供下载逻辑读取
+        viewModelScope.launch {
+            try {
+                val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("wifi_only_download", enabled).apply()
+                com.example.gameboxone.AppLog.d(TAG, "切换仅WiFi下载: enabled=$enabled")
+            } catch (_: Exception) { }
+        }
     }
 
     /**
@@ -113,7 +136,13 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
      */
     fun toggleHardwareAcceleration(enabled: Boolean) {
         isHardwareAcceleration = enabled
-        // 实际项目中，这里需要保存设置
+        viewModelScope.launch {
+            try {
+                val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("hardware_accel_enabled", enabled).apply()
+                com.example.gameboxone.AppLog.d(TAG, "切换硬件加速: enabled=$enabled")
+            } catch (_: Exception) { }
+        }
     }
 
     /**
@@ -121,16 +150,37 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
      */
     fun toggleSound(enabled: Boolean) {
         isSoundEnabled = enabled
-        // 实际项目中，这里需要保存设置
+        viewModelScope.launch {
+            try {
+                val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                prefs.edit().putBoolean("game_sound_enabled", enabled).apply()
+                com.example.gameboxone.AppLog.d(TAG, "切换游戏音效: enabled=$enabled")
+            } catch (_: Exception) { }
+        }
     }
 
     /**
      * 计算缓存大小
      */
     private fun calculateCacheSize() {
-        // 实际项目中，这里需要异步计算应用缓存大小
-        // 这里只是模拟
-        _cacheSize.value = "156 MB"
+        viewModelScope.launch {
+            try {
+                // 这里只粗略统计 WebView 相关缓存目录大小，避免误删已下载游戏资源
+                val cacheDirs = mutableListOf<File>()
+                try {
+                    val baseCache = appContext.cacheDir
+                    if (baseCache != null && baseCache.exists()) {
+                        cacheDirs.add(baseCache)
+                    }
+                } catch (_: Exception) { }
+
+                val sizeBytes = cacheDirs.sumOf { dir -> dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() } }
+                val sizeMb = sizeBytes.toDouble() / (1024 * 1024)
+                _cacheSize.value = String.format("%.1f MB", sizeMb)
+            } catch (_: Exception) {
+                _cacheSize.value = "未知"
+            }
+        }
     }
 
     /**
@@ -138,11 +188,23 @@ class SettingsViewModel @Inject constructor() : ViewModel() {
      */
     fun clearCache(context: Context, onComplete: () -> Unit) {
         viewModelScope.launch {
-            // 实际项目中，这里需要实际执行清除缓存操作
-            // 模拟清除缓存延迟
-            kotlinx.coroutines.delay(1000)
-            _cacheSize.value = "0 MB"
-            onComplete()
+            try {
+                // 清除 WebView 缓存（内存 + 磁盘）
+                try {
+                    val webView = android.webkit.WebView(context.applicationContext)
+                    webView.clearCache(true)
+                    webView.destroy()
+                } catch (_: Exception) { }
+
+                try {
+                    android.webkit.WebStorage.getInstance().deleteAllData()
+                } catch (_: Exception) { }
+
+                // 重新计算缓存大小
+                calculateCacheSize()
+            } finally {
+                onComplete()
+            }
         }
     }
 }
@@ -178,13 +240,7 @@ fun SettingScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("设置") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
+            com.example.gameboxone.ui.component.AppTopBar(title = null)
         }
     ) { innerPadding ->
         LazyColumn(
@@ -215,13 +271,6 @@ fun SettingScreen(
                     icon = Icons.Default.DeleteSweep
                 ) {
                     showClearCacheDialog = true
-                }
-                SettingsClickableItem(
-                    title = "管理下载",
-                    description = "查看和管理已下载的游戏",
-                    icon = Icons.Default.Download
-                ) {
-                    // 导航到下载管理页面
                 }
             }
 

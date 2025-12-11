@@ -12,9 +12,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import com.example.gameboxone.ui.theme.GameboxoneTheme
+import com.example.gameboxone.ui.theme.ThemeManager
 import com.example.gameboxone.ui.screen.MainScreen
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.core.view.WindowCompat
@@ -34,14 +37,18 @@ class MainActivity : ComponentActivity() {
 
         // Make the activity fullscreen by hiding system bars (status + navigation)
         WindowCompat.setDecorFitsSystemWindows(window, false)
-        val controller = WindowInsetsControllerCompat(window, window.decorView)
-        // Hide both status and navigation bars
-        controller.hide(WindowInsetsCompat.Type.systemBars())
-        // Allow swipe to show transient bars
-        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        hideSystemBars()
+
+        // 初始化主题状态（从 SharedPreferences 读取一次）
+        val prefs = getSharedPreferences("game_preferences", MODE_PRIVATE)
+        val darkEnabled = prefs.getBoolean("dark_mode_enabled", false)
+        ThemeManager.setDarkTheme(darkEnabled)
 
         setContent {
-            GameboxoneTheme {
+            // 订阅全局深色模式状态，切换时触发重组
+            val isDark by ThemeManager.isDarkTheme.collectAsState()
+
+            GameboxoneTheme(darkTheme = isDark) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -102,6 +109,20 @@ class MainActivity : ComponentActivity() {
                 Log.d("MainActivity", "[Ads] 预载检查通过，至少有一种广告类型已准备好")
             }
         }, 5_000)
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemBars()
+        }
+    }
+
+    private fun hideSystemBars() {
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        controller.hide(WindowInsetsCompat.Type.systemBars())
+        // 使用 transient bars，让状态栏偶尔被系统短暂显示后自动隐藏
+        controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
     }
 }
 

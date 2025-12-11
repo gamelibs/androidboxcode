@@ -473,10 +473,41 @@ class NetManager @Inject constructor(
 
                  cont.invokeOnCancellation { client.dispatcher.cancelAll() }
              }
-         } catch (e: Exception) {
-             Log.w(TAG, "health check exception", e)
-             false
-         }
+        } catch (e: Exception) {
+            Log.w(TAG, "health check exception", e)
+            false
+        }
+    }
+
+    /**
+     * 健康检查：带重试逻辑
+     * - 最多重试 maxAttempts 次（默认 3 次）
+     * - 每次失败之间采用简单退避延迟：500ms, 1000ms, ...
+     */
+    suspend fun checkHealthWithRetry(maxAttempts: Int = 3): Boolean {
+        var attempt = 0
+        while (attempt < maxAttempts) {
+            val idx = attempt + 1
+            try {
+                Log.d(TAG, "checkHealthWithRetry: 尝试 $idx/$maxAttempts, baseUrl=$BASE_URL")
+                if (checkHealth()) {
+                    return true
+                } else {
+                    Log.w(TAG, "checkHealthWithRetry: 第 $idx 次健康检查返回 false")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "checkHealthWithRetry: 第 $idx 次健康检查异常: ${e.message}")
+            }
+
+            attempt++
+            if (attempt < maxAttempts) {
+                val backoff = 500L * idx
+                Log.d(TAG, "checkHealthWithRetry: 将在 ${backoff}ms 后重试")
+                delay(backoff)
+            }
+        }
+        Log.e(TAG, "checkHealthWithRetry: 健康检查连续失败 $maxAttempts 次")
+        return false
     }
 
     /**
@@ -576,6 +607,19 @@ class NetManager @Inject constructor(
         onProgress: (Float) -> Unit
     ): Result<File> = withContext(Dispatchers.IO) {
         try {
+            // 若开启“仅在 WiFi 下下载”，则在非 WiFi 网络下直接拒绝大文件下载
+            try {
+                val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                val wifiOnly = prefs.getBoolean("wifi_only_download", true)
+                if (wifiOnly && getNetworkType() != NetworkType.WIFI) {
+                    val msg = "当前设置为仅在 WiFi 下下载，当前网络不是 WiFi"
+                    Log.w(TAG, msg)
+                    return@withContext Result.failure(IOException(msg))
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "检查 WiFi 下载设置失败，继续尝试下载", e)
+            }
+
             val connection = URL(url).openConnection() as HttpURLConnection
             connection.connect()
 

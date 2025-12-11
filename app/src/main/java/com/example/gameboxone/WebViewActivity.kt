@@ -146,6 +146,21 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
         insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
+        // 根据设置页的“硬件加速”开关控制当前 Activity 的硬件加速
+        try {
+            val prefs = getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+            val accelEnabled = prefs.getBoolean("hardware_accel_enabled", true)
+            if (!accelEnabled) {
+                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                Log.d(TAG, "硬件加速已根据设置关闭")
+            } else {
+                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                Log.d(TAG, "硬件加速已根据设置开启")
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "应用硬件加速设置失败", e)
+        }
+
         setContentView(R.layout.activity_web)
 
         // 初始化视图（绑定 layout 中的所有子视图引用）
@@ -194,9 +209,36 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             }
         }
 
+        // 在初始化阶段向 H5 同步一次当前音效设置（通过统一的桥接事件 set_sound:value）
+        trySyncSoundSettingToJs()
+
         // 设置 WebView 并启动本地静态文件服务器以便加载游戏
         setupWebView()
         startLocalServer()
+    }
+
+    /**
+     * 从 SharedPreferences 读取声音开关，并通过统一事件回调方法把 set_sound:value 发送给 H5
+     */
+    private fun trySyncSoundSettingToJs() {
+        try {
+            val prefs = getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+            val soundEnabled = prefs.getBoolean("game_sound_enabled", true)
+            val value = if (soundEnabled) 1 else 0
+
+            // 通过统一的事件回调机制下发到 H5：type = set_sound, value = 0/1
+            val payload = """[{"type":"set_sound","value":$value}]"""
+            try {
+                com.example.gameboxone.callback.AndroidEventCallBackHolder
+                    .callback()
+                    ?.sendRawPayload(payload)
+                Log.d(TAG, "已通过回调向 H5 同步声音设置 set_sound:$value")
+            } catch (e: Exception) {
+                Log.w(TAG, "通过回调发送 set_sound 失败，将忽略本次同步", e)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "读取声音设置失败，跳过同步", e)
+        }
     }
 
     /**
@@ -619,7 +661,30 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             try {
                 Log.d(TAG, "准备启动本地服务器，游戏路径: $gamePath")
                 webServerManager.startServer(gamePath!!)
-                val url = webServerManager.getGameUrl(gamePath!!)
+
+                // 基础本地 URL（例如 http://localhost:PORT/GameName/index.html）
+                var url = webServerManager.getGameUrl(gamePath!!)
+
+                // 为了避免 WebView 复用旧版本的 HTTP 缓存，如果能拿到补丁版本，就追加到 URL 作为版本参数
+                // 这样每次版本变更（patch 递增）都会生成一个新的 URL，从而强制加载新资源。
+                val id = gameId
+                if (!id.isNullOrBlank()) {
+                    try {
+                        val game = dataManager.getGameById(id)
+                        val patch = game?.patch ?: 0
+                        if (!url.isNullOrEmpty() && patch > 0) {
+                            url = if (url!!.contains("?")) {
+                                "$url&v=$patch"
+                            } else {
+                                "$url?v=$patch"
+                            }
+                            Log.d(TAG, "为避免缓存复用追加版本参数: patch=$patch, url=$url")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "追加版本参数失败，继续使用基础 URL", e)
+                    }
+                }
+
                 gameUrl = url
                 launch(Dispatchers.Main) {
                     if (!url.isNullOrEmpty()) {

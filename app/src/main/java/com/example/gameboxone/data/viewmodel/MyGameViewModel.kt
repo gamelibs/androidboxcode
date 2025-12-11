@@ -3,14 +3,17 @@ package com.example.gameboxone.data.viewmodel
 import com.example.gameboxone.AppLog as Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import android.content.Context
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.state.MyGameState
 import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.manager.MyGameManager
+import com.example.gameboxone.WebViewActivity
 import com.example.gameboxone.base.AppDatabase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,7 +26,8 @@ private const val TAG = "MyGameViewModel"
 class MyGameViewModel @Inject constructor(
     private val myGameManager: MyGameManager,
     private val eventManager: EventManager,
-    private val database: AppDatabase
+    private val database: AppDatabase,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
     // UI 状态
     private val _uiState = MutableStateFlow(MyGameState())
@@ -257,6 +261,36 @@ class MyGameViewModel @Inject constructor(
         Log.d(TAG, "手动刷新游戏列表")
         isDataLoaded = false // 重置加载标记，允许重新加载
         loadGameData() // 重新加载数据
+    }
+
+    /**
+     * 启动已安装的游戏
+     */
+    fun playGame(game: Custom.MyGameData) {
+        viewModelScope.launch {
+            try {
+                if (!game.isLocal || game.localPath.isBlank()) {
+                    Log.w(TAG, "无法启动游戏：未安装或本地路径为空, gameId=${game.id}, name=${game.name}")
+                    _uiState.value = _uiState.value.copy(
+                        error = "无法启动游戏：未安装或本地路径无效"
+                    )
+                    return@launch
+                }
+
+                Log.d(TAG, "[GAMEBOX] 从我的游戏启动: gameId=${game.id}, name=${game.name}, path=${game.localPath}")
+
+                // 直接启动 WebViewActivity 加载本地游戏
+                WebViewActivity.start(context, game.localPath, game.id)
+
+                // 发送游戏启动事件（用于统计/埋点）
+                eventManager.emitGameEvent(GameEvent.GameStart(game.name))
+            } catch (e: Exception) {
+                Log.e(TAG, "启动游戏失败: ${game.name}", e)
+                _uiState.value = _uiState.value.copy(
+                    error = "启动游戏失败: ${e.message}"
+                )
+            }
+        }
     }
 
     /**

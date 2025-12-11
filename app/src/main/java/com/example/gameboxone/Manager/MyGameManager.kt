@@ -108,6 +108,13 @@ class MyGameManager @Inject constructor(
                 base.iconUrl
             }
 
+            Log.d(
+                TAG,
+                "[GAMEBOX] 我的游戏展示数据: gameId=${item.gameId}, name=${item.name}, " +
+                    "localSize=${base.size}, remoteSize=${remote?.size}, finalSize=$finalSize, " +
+                    "iconUrl=$finalIconUrl"
+            )
+
             base.copy(
                 hasUpdate = hasUpdate,
                 size = finalSize,
@@ -274,10 +281,13 @@ class MyGameManager @Inject constructor(
         onProgress: (Float) -> Unit
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
+            // 统一使用业务 gameId（远程 JSON 的 gameid），如果为空再退回 id
+            val bizGameId = game.gameId?.takeIf { it.isNotBlank() } ?: game.id
+
             // 检查游戏是否已安装
-            if (isGameInstalled(game.id)) {
+            if (isGameInstalled(bizGameId)) {
                 Log.d(TAG, "游戏已安装，跳过下载: ${game.name}")
-                val existingGame = myGameDao.getGameById(game.id)
+                val existingGame = myGameDao.getGameById(bizGameId)
                 return@withContext Result.success(existingGame?.localPath ?: "")
             }
 
@@ -344,7 +354,7 @@ class MyGameManager @Inject constructor(
                 try {
                     // 创建MyGameItem
                     val myGameItem = MyGameItem(
-                        gameId = game.id,
+                        gameId = bizGameId,
                         name = game.name,
                         icon = game.iconUrl,
                         gameRes = game.gameRes,
@@ -360,10 +370,10 @@ class MyGameManager @Inject constructor(
                     myGameDao.insert(myGameItem)
 
                     // 同时更新GameConfig表
-                    updateGameConfig(game.id, installPath, true)
+                    updateGameConfig(bizGameId, installPath, true)
 
                     // 发送安装成功事件
-                    eventManager.emitGameEvent(GameEvent.GameInstalled(game.id))
+                    eventManager.emitGameEvent(GameEvent.GameInstalled(bizGameId))
 
                     Log.d(TAG, "游戏安装成功: ${game.name}, 路径: $installPath")
                     return@withContext Result.success(installPath)
@@ -395,6 +405,9 @@ class MyGameManager @Inject constructor(
         try {
             Log.d(TAG, "正在从备份目录安装游戏: ${game.name}")
 
+            // 统一使用业务 gameId（远程 JSON 的 gameid），如果为空再退回 id
+            val bizGameId = game.gameId.takeIf { !it.isNullOrBlank() } ?: game.id
+
             // 1. 从资源管理器加载游戏文件 - 纯资源操作
             val loadResult = resourceManager.loadFromBackupDirectory(game)
 
@@ -403,7 +416,7 @@ class MyGameManager @Inject constructor(
                 onSuccess = { localPath ->
                     // 转换为MyGameItem并保存到数据库
                     val myGameItem = MyGameItem(
-                        gameId = game.id,
+                        gameId = bizGameId,
                         name = game.name,
                         icon = game.iconUrl,
                         gameRes = game.gameRes ?: "",
@@ -418,7 +431,7 @@ class MyGameManager @Inject constructor(
                     // 更新数据库和发送事件
                     try {
                         // 检查是否已存在
-                        val existingGame = myGameDao.getGameById(game.id)
+                        val existingGame = myGameDao.getGameById(bizGameId)
                         if (existingGame != null) {
                             // 更新现有记录
                             val updatedGame = existingGame.copy(
@@ -436,10 +449,10 @@ class MyGameManager @Inject constructor(
                         }
 
                         // 同时更新GameConfig表中的记录
-                        updateGameConfig(game.id, localPath, true)
+                        updateGameConfig(bizGameId, localPath, true)
 
                         // 发送安装成功事件
-                        eventManager.emitGameEvent(GameEvent.GameInstalled(game.id))
+                        eventManager.emitGameEvent(GameEvent.GameInstalled(bizGameId))
 
                         Log.d(TAG, "游戏从备份目录安装成功: ${game.name}")
 

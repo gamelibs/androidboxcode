@@ -183,10 +183,7 @@ class GameDetailViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 Log.d(TAG, "开始处理返回事件")
-                // 先清理状态，确保数据已保存
-                clearState()
-                
-                // 发出返回导航事件
+                // 直接发出返回导航事件，避免在动画期间清空状态导致 UI 闪一下错误页
                 eventManager.emitNavigationEvent(NavigationEvent.PopBackStack)
                 
                 Log.d(TAG, "返回事件处理完成")

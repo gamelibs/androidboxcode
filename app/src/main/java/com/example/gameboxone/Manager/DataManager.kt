@@ -669,8 +669,9 @@ class DataManager @Inject constructor(
 
              // 3) 到此已有 effectiveBase，可进行 /health 校验
              try {
+                 // 使用 NetManager 统一的 3 次重试健康检查逻辑
                  val healthy = try {
-                     netManager.checkHealth()
+                     netManager.checkHealthWithRetry(3)
                  } catch (e: Exception) {
                      Log.w(TAG, "health check exception", e)
                      false
@@ -685,8 +686,8 @@ class DataManager @Inject constructor(
                             try {
                                 messageService.showMessage(
                                     UiMessage.Dialog(
-                                        title = "请求远程配置失败",
-                                        message = "无法访问远端服务（${effectiveBase}），请检查网络或域名设置。",
+                                        title = "网络错误",
+                                        message = "当前网络状态不稳定，暂时无法连接远端服务，将使用本地数据。",
                                         confirmAction = {},
                                         cancelable = false,
                                         dismissOnConfirm = true
@@ -712,8 +713,8 @@ class DataManager @Inject constructor(
                         try {
                             messageService.showMessage(
                                 UiMessage.Dialog(
-                                    title = "请求远程配置失败",
-                                    message = "远程健康检查异常: ${e.message}",
+                                    title = "网络错误",
+                                    message = "远程健康检查异常，将暂时使用本地数据。错误信息：${e.message}",
                                     confirmAction = {},
                                     cancelable = false,
                                     dismissOnConfirm = true
@@ -848,10 +849,9 @@ class DataManager @Inject constructor(
             try {
                 Log.d(TAG, "开始从网络获取游戏配置数据")
 
-                // 1) 可达性检查：BASE_URL/health
+                // 1) 可达性检查：BASE_URL/health，使用 NetManager 统一的 3 次重试机制
                 val healthOk = try {
-                    Log.d(TAG, "fetchGameConfigFromNetwork: 开始健康检查 baseUrl=${netManager.getBaseUrl()}")
-                    netManager.checkHealth()
+                    netManager.checkHealthWithRetry(3)
                 } catch (e: Exception) {
                     Log.w(TAG, "fetchGameConfigFromNetwork: 健康检查异常", e)
                     false
@@ -864,8 +864,8 @@ class DataManager @Inject constructor(
                             withContext(Dispatchers.Main) {
                                 messageService.showMessage(
                                     UiMessage.Dialog(
-                                        title = "请求远程配置失败",
-                                        message = "无法访问远端服务（${netManager.getBaseUrl()}），请检查网络或域名设置。",
+                                        title = "网络错误",
+                                        message = "网络连接异常，暂时无法获取游戏列表，请检查网络后重试。",
                                         confirmAction = {},
                                         cancelable = false,
                                         dismissOnConfirm = true
@@ -890,8 +890,8 @@ class DataManager @Inject constructor(
                                     withContext(Dispatchers.Main) {
                                         messageService.showMessage(
                                             UiMessage.Dialog(
-                                                title = "请求远程配置失败",
-                                                message = "无法从远端获取配置，请检查网络或域名是否可达。",
+                                                title = "网络错误",
+                                                message = "未能获取游戏列表，请检查网络连接或稍后重试。",
                                                 confirmAction = {},
                                                 cancelable = false,
                                                 dismissOnConfirm = true

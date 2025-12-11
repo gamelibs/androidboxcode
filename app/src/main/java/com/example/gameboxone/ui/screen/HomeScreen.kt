@@ -27,6 +27,8 @@ import com.example.gameboxone.R
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.data.viewmodel.HomeViewModel
+import com.example.gameboxone.data.viewmodel.UserProfileViewModel
+import com.example.gameboxone.data.model.UserLevelConfig
 import java.io.File
 
 
@@ -113,8 +115,22 @@ private fun HomeTopBar(
     onSyncClick: () -> Unit,
     onSdkUpdateClick: () -> Unit
 ) {
+    // 订阅用户等级，用于展示 LvX 称号
+    val profileViewModel: UserProfileViewModel = hiltViewModel()
+    val profile by profileViewModel.profile.collectAsState()
+    val level = UserLevelConfig.levelForExp(profile.exp)
+    val levelText = level.title
+
     TopAppBar(
-        title = { Text("游戏盒子") },
+        title = {
+            Column {
+                Text(
+                    text = levelText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                )
+            }
+        },
         actions = {
             TextButton(
                 onClick = onSdkUpdateClick,
@@ -138,7 +154,11 @@ private fun HomeTopBar(
                     )
                 }
             }
-        }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
     )
 }
 

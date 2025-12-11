@@ -130,13 +130,10 @@ fun GameDetailScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(text = "") },
-                navigationIcon = {
-                    IconButton(onClick = { viewModel.onBackPressed() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回")
-                    }
-                }
+            com.example.gameboxone.ui.component.AppTopBar(
+                title = "游戏详情",
+                showBack = true,
+                onBack = { viewModel.onBackPressed() }
             )
         },
         containerColor = Color.White

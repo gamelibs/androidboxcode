@@ -86,16 +86,6 @@ class HomeViewModel @Inject constructor(
                 games = games,
                 error = null
             )
-            
-            if (games.isEmpty()) {
-                messageService.showMessage(
-                    UiMessage.Info(
-                        message = "没有找到可用的游戏",
-                        actionLabel = "刷新",
-                        onAction = { syncGameConfig() }
-                    )
-                )
-            }
         } catch (e: Exception) {
             Log.e(TAG, "加载游戏数据失败", e)
             _uiState.value = _uiState.value.copy(
@@ -160,15 +150,6 @@ class HomeViewModel @Inject constructor(
                 
                 Log.d(TAG, "游戏数据同步完成，共 ${games.size} 个游戏")
                 
-                if (games.isEmpty()) {
-                    messageService.showMessage(
-                        UiMessage.Info(
-                            message = "没有找到可用的游戏",
-                            actionLabel = "重试",
-                            onAction = { syncGameConfig() }
-                        )
-                    )
-                }
             } catch (e: Exception) {
                 Log.e(TAG, "同步游戏数据失败", e)
                 _uiState.value = _uiState.value.copy(

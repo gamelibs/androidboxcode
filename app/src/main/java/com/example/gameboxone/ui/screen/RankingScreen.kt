@@ -254,13 +254,7 @@ fun RankingScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("游戏排行榜") },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
+            com.example.gameboxone.ui.component.AppTopBar(title = null)
         }
     ) { innerPadding ->
         Column(

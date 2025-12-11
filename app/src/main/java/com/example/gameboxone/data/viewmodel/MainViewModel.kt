@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.data.model.Custom
+import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.navigation.NavigationEvent
 import com.example.gameboxone.service.MessageService
 import com.example.gameboxone.ui.navigation.NavGraphBuilders
@@ -103,6 +104,9 @@ class MainViewModel @Inject constructor(
     }
 
     init {
+        // 启动时先显示全局加载状态，直到收到数据事件（Initialized/Error 等）再关闭
+        _uiState.update { it.copy(isLoading = true) }
+
         // 订阅全局消息流
         viewModelScope.launch {
             messageService.messageFlow.collect { message ->
@@ -138,6 +142,24 @@ class MainViewModel @Inject constructor(
                 }
              }
          }
+
+        // 订阅数据事件，用于全局 loading 控制（例如启动时的游戏数据预检）
+        viewModelScope.launch {
+            eventManager.dataEvents.collect { event ->
+                when (event) {
+                    is DataEvent.RefreshStarted -> {
+                        _uiState.update { it.copy(isLoading = true) }
+                    }
+                    is DataEvent.Initialized,
+                    is DataEvent.RefreshCompleted,
+                    is DataEvent.DataLoaded,
+                    is DataEvent.Error -> {
+                        _uiState.update { it.copy(isLoading = false) }
+                    }
+                    else -> { /* ignore */ }
+                }
+            }
+        }
     }
 
     fun dismissMessage(id: String) {
