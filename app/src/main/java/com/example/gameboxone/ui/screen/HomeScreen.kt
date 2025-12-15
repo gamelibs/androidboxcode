@@ -1,23 +1,27 @@
 package com.example.gameboxone.ui.screen
 
-
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
+import androidx.compose.material3.pulltorefresh.PullToRefreshContainer
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -29,28 +33,49 @@ import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.data.viewmodel.HomeViewModel
 import com.example.gameboxone.data.viewmodel.UserProfileViewModel
 import com.example.gameboxone.data.model.UserLevelConfig
+import com.example.gameboxone.ui.component.GameCardEnhanced
+import com.example.gameboxone.ui.component.HomeStatusHeader
 import java.io.File
-
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel(),
-    onGameSelected: (GameConfigItem) -> Unit = {}
+    onGameSelected: (GameConfigItem) -> Unit = {},
+    onProfileClick: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-
-//    LaunchedEffect(Unit) {
-
-//    }
+    val profileViewModel: UserProfileViewModel = hiltViewModel()
+    val profile by profileViewModel.profile.collectAsState()
+    
+    // Pull to refresh state
+    val pullRefreshState = rememberPullToRefreshState()
+    
+    if (pullRefreshState.isRefreshing) {
+        LaunchedEffect(true) {
+            viewModel.syncGameConfig()
+        }
+    }
+    
+    // Stop refreshing when loading is done
+    LaunchedEffect(uiState.isSyncing) {
+        if (!uiState.isSyncing) {
+            pullRefreshState.endRefresh()
+        } else {
+            pullRefreshState.startRefresh()
+        }
+    }
 
     Scaffold(
         topBar = {
-            HomeTopBar(
-                isSyncing = uiState.isSyncing,
-                isLoading = uiState.isLoading,
-                onSyncClick = viewModel::syncGameConfig,
-                onSdkUpdateClick = viewModel::refreshSdkOnly
+            HomeStatusHeader(
+                userExp = profile.exp,
+                onSdkUpdateClick = viewModel::refreshSdkOnly,
+                onRefreshClick = viewModel::syncGameConfig,
+                onProfileClick = onProfileClick,
+                modifier = Modifier
+                    .statusBarsPadding()
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
             )
         }
     ) { padding ->
@@ -60,14 +85,17 @@ fun HomeScreen(
                 .padding(padding)
         ) {
             when {
-                uiState.isLoading || uiState.isSyncing -> LoadingContent()
+                uiState.isLoading && uiState.games.isEmpty() -> LoadingContent()
                 uiState.games.isEmpty() && uiState.error == null -> {
                     // 空状态处理
                     EmptyContent { viewModel.loadInitialData() }
                 }
                 else -> GameGrid(
                     games = uiState.games,
+                    userExp = profile.exp,
                     onGameClick = onGameSelected,
+                    onSdkUpdateClick = viewModel::refreshSdkOnly,
+                    onRefreshClick = viewModel::syncGameConfig,
                     iconCacheManager = viewModel.iconCacheManager
                 )
             }
@@ -87,129 +115,24 @@ private fun LoadingContent() {
 @Composable
 private fun GameGrid(
     games: List<GameConfigItem>,
+    userExp: Long,
     onGameClick: (GameConfigItem) -> Unit,
+    onSdkUpdateClick: () -> Unit,
+    onRefreshClick: () -> Unit,
     iconCacheManager: IconCacheManager
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(games, key = { it.id }) { game ->
-            GameCard(
+            GameCardEnhanced(
                 game = game,
                 iconCacheManager = iconCacheManager,
                 onClick = { onGameClick(game) }
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun HomeTopBar(
-    isSyncing: Boolean,
-    isLoading: Boolean,
-    onSyncClick: () -> Unit,
-    onSdkUpdateClick: () -> Unit
-) {
-    // 订阅用户等级，用于展示 LvX 称号
-    val profileViewModel: UserProfileViewModel = hiltViewModel()
-    val profile by profileViewModel.profile.collectAsState()
-    val level = UserLevelConfig.levelForExp(profile.exp)
-    val levelText = level.title
-
-    TopAppBar(
-        title = {
-            Column {
-                Text(
-                    text = levelText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                )
-            }
-        },
-        actions = {
-            TextButton(
-                onClick = onSdkUpdateClick,
-                enabled = !isSyncing && !isLoading
-            ) {
-                Text("<=>")
-            }
-            IconButton(
-                onClick = onSyncClick,
-                enabled = !isSyncing && !isLoading
-            ) {
-                if (isSyncing) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = MaterialTheme.colorScheme.onPrimary
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Sync,
-                        contentDescription = "同步配置"
-                    )
-                }
-            }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        )
-    )
-}
-
-@Composable
-private fun GameCard(
-    game: GameConfigItem,
-    iconCacheManager: IconCacheManager,
-    onClick: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            // 获取图标文件
-            val iconFile by produceState<File?>(initialValue = null, key1 = game.id) {
-                // New behavior: prefer cached gamesicon; if missing, download from config.downicon
-                value = iconCacheManager.getGameIcon(game.id, "", game.downicon)
-            }
-
-            // 图标容器 - 修改这里的尺寸使图标更大
-            Box(
-                modifier = Modifier
-                    .size(256.dp)  // 从64.dp改为96.dp，增加图标尺寸
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(MaterialTheme.colorScheme.surfaceVariant),
-                contentAlignment = Alignment.Center
-            ) {
-                // 使用 AsyncImage 的错误处理和占位符功能
-                AsyncImage(
-                    model = iconFile,
-                    contentDescription = "游戏图标: ${game.name}",
-                    contentScale = ContentScale.Crop,
-                    modifier = Modifier.fillMaxSize(),
-                    error = painterResource(id = R.drawable.ic_game_default),
-                    placeholder = painterResource(id = R.drawable.ic_game_default)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            Text(
-                text = game.name,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                style = MaterialTheme.typography.bodyMedium
             )
         }
     }

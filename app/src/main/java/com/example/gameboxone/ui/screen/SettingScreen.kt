@@ -3,6 +3,7 @@ package com.example.gameboxone.ui.screen
 import android.content.Context
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,6 +14,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -239,9 +241,7 @@ fun SettingScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
 
     Scaffold(
-        topBar = {
-            com.example.gameboxone.ui.component.AppTopBar(title = null)
-        }
+        // topBar removed
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier
@@ -351,53 +351,103 @@ fun SettingScreen(
             }
         }
 
-        // 清除缓存确认对话框
-        if (showClearCacheDialog) {
-            AlertDialog(
-                onDismissRequest = { showClearCacheDialog = false },
-                title = { Text("清除缓存") },
-                text = { Text("确定要清除所有缓存数据吗？\n这不会影响您已下载的游戏。") },
-                confirmButton = {
-                    Button(
-                        onClick = {
-                            viewModel.clearCache(context) {
-                                showClearCacheDialog = false
-                            }
-                        }
-                    ) {
-                        Text("确认")
-                    }
-                },
-                dismissButton = {
-                    OutlinedButton(
-                        onClick = { showClearCacheDialog = false }
-                    ) {
-                        Text("取消")
-                    }
+        // 清除缓存确认对话框（自定义覆盖层，避免触发系统对话框导致状态栏重新显示）
+        ConfirmOverlayDialog(
+            visible = showClearCacheDialog,
+            title = "清除缓存",
+            message = "确定要清除所有缓存数据吗？\n这不会影响您已下载的游戏。",
+            confirmText = "确认",
+            dismissText = "取消",
+            onConfirm = {
+                viewModel.clearCache(context) {
+                    showClearCacheDialog = false
                 }
-            )
-        }
+            },
+            onDismiss = { showClearCacheDialog = false }
+        )
 
-        // 关于对话框
-        if (showAboutDialog) {
-            AlertDialog(
-                onDismissRequest = { showAboutDialog = false },
-                title = { Text("关于 GameBoxOne") },
-                text = {
-                    Column {
-                        Text("版本: 1.0.0")
-                        Text("开发者: GameBoxOne Team")
-                        Text("© 2025 GameBoxOne. All rights reserved.")
+        // 关于对话框，同样使用自定义覆盖层以保持全屏沉浸体验
+        ConfirmOverlayDialog(
+            visible = showAboutDialog,
+            title = "关于 GameBoxOne",
+            message = "版本: 1.0.0\n开发者: GameBoxOne Team\n© 2025 GameBoxOne. All rights reserved.",
+            confirmText = "确认",
+            dismissText = null,
+            onConfirm = { showAboutDialog = false },
+            onDismiss = { showAboutDialog = false }
+        )
+    }
+}
+
+/**
+ * 全屏覆盖层样式的确认对话框，避免使用系统 AlertDialog 破坏沉浸式状态栏隐藏。
+ */
+@Composable
+fun ConfirmOverlayDialog(
+    visible: Boolean,
+    title: String,
+    message: String,
+    confirmText: String,
+    dismissText: String? = null,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    if (!visible) return
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f))
+            // 点击遮罩区域关闭（可根据需要调整）
+            .clickable(
+                indication = null,
+                interactionSource = remember { MutableInteractionSource() }
+            ) { onDismiss() },
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            modifier = Modifier
+                .padding(horizontal = 32.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(horizontal = 24.dp, vertical = 20.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold),
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (dismissText != null) {
+                        OutlinedButton(
+                            modifier = Modifier.weight(1f),
+                            onClick = onDismiss
+                        ) {
+                            Text(dismissText)
+                        }
                     }
-                },
-                confirmButton = {
                     Button(
-                        onClick = { showAboutDialog = false }
+                        modifier = Modifier.weight(1f),
+                        onClick = onConfirm
                     ) {
-                        Text("确认")
+                        Text(confirmText)
                     }
                 }
-            )
+            }
         }
     }
 }

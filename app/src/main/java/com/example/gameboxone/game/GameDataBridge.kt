@@ -256,6 +256,15 @@ class GameDataBridge(
                             try {
                                 eventCallBack?.sendAppAdsOn(adsEnabled)
                                 Log.d(TAG, "app_ads_event: report app_ads_on=$adsEnabled to JS")
+
+                                // 在 SDK 启动握手后，下发 set_pushtime 事件给 H5，
+                                // 告诉 H5 事件上报的时间间隔（单位：秒），当前固定为 0.5
+                                try {
+                                    eventCallBack?.sendIframeEvents("set_pushtime" to 0.5)
+                                    Log.d(TAG, "app_ads_event: push set_pushtime=0.5 to JS")
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "sendIframeEvents(set_pushtime) failed", e)
+                                }
                             } catch (e: Exception) {
                                 Log.w(TAG, "sendAppAdsOn($adsEnabled) failed", e)
                             }

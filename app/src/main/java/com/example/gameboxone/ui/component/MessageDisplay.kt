@@ -1,6 +1,9 @@
 package com.example.gameboxone.ui.component
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -20,12 +23,11 @@ import androidx.compose.runtime.remember
 import com.example.gameboxone.base.UiMessage
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
 import com.example.gameboxone.AppLog as Log
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.material3.AlertDialog
 
 /**
  * 全局消息显示组件
@@ -79,22 +81,51 @@ private fun ErrorMessage(
     val showDialog = remember { mutableStateOf(true) }
     
     if (showDialog.value) {
-        AlertDialog(
-            onDismissRequest = {
-                showDialog.value = false
-                onDismiss()
-            },
-            title = { Text("错误") },
-            text = { Text(message.message) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDialog.value = false
-                    onDismiss()
-                }) {
-                    Text("确定")
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.35f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 20.dp)
+                ) {
+                    Text(
+                        text = "错误",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.error
+                    )
+
+                    Text(
+                        text = message.message,
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        contentAlignment = Alignment.CenterEnd
+                    ) {
+                        TextButton(
+                            onClick = {
+                                showDialog.value = false
+                                onDismiss()
+                            }
+                        ) {
+                            Text("确定")
+                        }
+                    }
                 }
             }
-        )
+        }
     }
 }
 
@@ -103,7 +134,12 @@ private fun InfoMessage(
     message: UiMessage,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = onDismiss) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f)),
+        contentAlignment = Alignment.Center
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -132,7 +168,7 @@ private fun InfoMessage(
                 }
             }
         }
-        }
+    }
 }
 
 /**
@@ -143,9 +179,19 @@ fun MessageDialog(
     message: UiMessage.Dialog,
     onDismiss: () -> Unit
 ) {
-    Dialog(onDismissRequest = {
-        if (message.cancelable) onDismiss()
-    }) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black.copy(alpha = 0.35f))
+            .let { base ->
+                if (message.cancelable) {
+                    base.clickable(onClick = onDismiss)
+                } else {
+                    base
+                }
+            },
+        contentAlignment = Alignment.Center
+    ) {
         Card(
             modifier = Modifier
                 .fillMaxWidth()
@@ -182,10 +228,10 @@ fun MessageDialog(
                         } catch (e: Exception) {
                             Log.w("MessageDisplay", "confirmAction threw", e)
                         }
-                     }
-                 ) {
-                     Text("确定")
-                 }
+                    }
+                ) {
+                    Text("确定")
+                }
             }
         }
     }

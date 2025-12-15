@@ -86,7 +86,7 @@ class MainActivity : ComponentActivity() {
             Log.d("MainActivity", "[Ads] 当前不可显示开屏广告，将依赖 AdManager 的预加载与后续触发")
         }
 
-        // 延迟几秒检查一次预载结果：若广告环境不可用或所有广告类型都未准备好，则弹出系统提示
+        // 延迟几秒检查一次预载结果：仅在“广告环境不可用 且 所有广告类型都未准备好”时才提示失败
         Handler(Looper.getMainLooper()).postDelayed({
             val canShowAds = AdManager.canShowAds()
             val anyReady = AdManager.isAppOpenReady() ||
@@ -98,7 +98,8 @@ class MainActivity : ComponentActivity() {
                 "[Ads] 预载检查: canShowAds=$canShowAds, anyReady=$anyReady, appOpenReady=${AdManager.isAppOpenReady()}, interstitialReady=${AdManager.isInterstitialReady()}, rewardedReady=${AdManager.isRewardedReady()}"
             )
 
-            if (!canShowAds || !anyReady) {
+            // 更温和的失败判定：只有在广告环境本身不可用并且所有广告类型都未就绪时才认为初始化失败
+            if (!canShowAds && !anyReady) {
                 // 使用系统 Toast 提示广告初始化失败，保证在大多数环境下都能看到
                 Toast.makeText(
                     this,

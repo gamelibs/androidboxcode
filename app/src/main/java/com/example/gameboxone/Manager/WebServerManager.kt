@@ -92,9 +92,18 @@ class WebServerManager @Inject constructor(
         securityHeaders["Access-Control-Allow-Methods"] = "GET, OPTIONS"
         securityHeaders["Access-Control-Allow-Headers"] = "Content-Type, Range"
 
-        // 跨域隔离策略 - WebGL必要
-        securityHeaders["Cross-Origin-Embedder-Policy"] = "require-corp"
-        securityHeaders["Cross-Origin-Opener-Policy"] = "same-origin"
+        // 跨域隔离策略
+        // 注意：
+        // - 启用 Cross-Origin-Embedder-Policy: require-corp / Cross-Origin-Opener-Policy: same-origin
+        //   会让页面进入跨源隔离模式。
+        // - 在该模式下，页面无法加载没有 CORP 头的第三方 JS 资源（例如远程 SDK），
+        //   典型报错为：net::ERR_BLOCKED_BY_RESPONSE.NotSameOriginAfterDefaultedToSameOriginByCoep。
+        // - 当前本地游戏场景通常不需要 SharedArrayBuffer 等跨源隔离能力，
+        //   为了兼容外部 JS SDK，这里默认不再开启 COEP/COOP。
+        // 如后续确有需要，可按需恢复下面两行：
+        // securityHeaders["Cross-Origin-Embedder-Policy"] = "require-corp"
+        // securityHeaders["Cross-Origin-Opener-Policy"] = "same-origin"
+
         securityHeaders["Cross-Origin-Resource-Policy"] = "cross-origin"
 
         // 内容安全策略

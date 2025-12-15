@@ -5,8 +5,9 @@ import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.base.AppDatabase
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.data.model.Custom
-import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.data.model.AppConfigItem
+import com.example.gameboxone.data.model.GameConfigItem
+import com.example.gameboxone.data.model.MyGameItem
 import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.service.MessageService
@@ -833,9 +834,61 @@ class DataManager @Inject constructor(
                 Log.d(TAG, "使用缓存的游戏配置数据: ${_gameConfigCache?.size ?: 0} 个游戏")
             }
 
-            // 返回缓存的副本，避免外部修改缓存
+            // 返回前统一根据“我的游戏”表对 isLocal/localPath 做一次对齐，
+            // 确保首页等位置在展示游戏列表时就能正确识别已安装状态
             val finalCache = _gameConfigCache ?: database.gameConfigDao().getAll()
-            return finalCache.toList()
+            val mergedWithMyGames = try {
+                mergeWithMyGames(finalCache)
+            } catch (e: Exception) {
+                Log.e(TAG, "合并我的游戏状态失败，继续使用原始配置列表", e)
+                finalCache
+            }
+            _gameConfigCache = mergedWithMyGames
+            lastCacheTime = System.currentTimeMillis()
+
+            // 返回副本，避免外部修改缓存
+            return mergedWithMyGames.toList()
+        }
+    }
+
+    /**
+     * 将 game_config 中的配置与 my_games 表进行对齐，
+     * 以 my_games 作为已安装状态的“真源”，修正 isLocal 和 localPath。
+     */
+    private suspend fun mergeWithMyGames(configItems: List<GameConfigItem>): List<GameConfigItem> {
+        if (configItems.isEmpty()) return configItems
+
+        return withContext(Dispatchers.IO) {
+            val myGames: List<MyGameItem> = try {
+                database.myGameDao().getAllGamesList()
+            } catch (e: Exception) {
+                Log.e(TAG, "读取我的游戏列表失败，跳过状态合并", e)
+                emptyList()
+            }
+
+            if (myGames.isEmpty()) {
+                // 没有任何已安装游戏，则全部标记为未安装
+                return@withContext configItems.map { it.copy(isLocal = false, localPath = "") }
+            }
+
+            val myGameMap = myGames.associateBy { it.gameId }
+
+            configItems.map { config ->
+                val myGame = myGameMap[config.gameId]
+                if (myGame != null) {
+                    // 已安装：以 my_games 为准写回 isLocal/localPath
+                    config.copy(
+                        isLocal = true,
+                        localPath = myGame.localPath.ifBlank { config.localPath }
+                    )
+                } else {
+                    // 未安装：清理本地标记，避免误显示为已安装
+                    config.copy(
+                        isLocal = false,
+                        localPath = ""
+                    )
+                }
+            }
         }
     }
 

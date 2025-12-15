@@ -32,9 +32,10 @@ object NavGraphBuilders {
     // 页面路由定义
     object Routes {
         const val HOME = "hot"
+        const val ADVENTURE = "adventure"
         const val MY_GAME = "myGame"
-        const val RANKING = "ranking"
         const val SETTING = "setting"
+        const val PROFILE = "profile"
     }
 
 
@@ -43,18 +44,18 @@ object NavGraphBuilders {
     val bottomNavItems = listOf(
         Custom.NavItem(
             route = Routes.HOME,
-            title = "热门",
+            title = "首页",
             icon = { Icons.Default.Home }
+        ),
+        Custom.NavItem(
+            route = Routes.ADVENTURE,
+            title = "历练",
+            icon = { Icons.Default.Star } // Using Star for Adventure/Town
         ),
         Custom.NavItem(
             route = Routes.MY_GAME,
             title = "我的游戏",
-            icon = { Icons.Default.Person }
-        ),
-        Custom.NavItem(
-            route = Routes.RANKING,
-            title = "排行榜",
-            icon = { Icons.Default.Star }
+            icon = { Icons.Default.Person } // Reverted to Person or maybe SportsEsports if available
         ),
         Custom.NavItem(
             route = Routes.SETTING,
@@ -76,9 +77,10 @@ object NavGraphBuilders {
     fun logRoutes() {
         Log.d(TAG, "所有导航路由:")
         Log.d(TAG, "HOME = ${Routes.HOME}")
+        Log.d(TAG, "ADVENTURE = ${Routes.ADVENTURE}")
         Log.d(TAG, "MY_GAME = ${Routes.MY_GAME}")
-        Log.d(TAG, "RANKING = ${Routes.RANKING}")
         Log.d(TAG, "SETTING = ${Routes.SETTING}")
+        Log.d(TAG, "PROFILE = ${Routes.PROFILE}")
         Log.d(TAG, "底部导航项:")
         bottomNavItems.forEachIndexed { index, navItem ->
             Log.d(TAG, "项目 $index: ${navItem.route}, ${navItem.title}")

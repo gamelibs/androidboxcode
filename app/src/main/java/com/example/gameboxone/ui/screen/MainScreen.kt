@@ -143,9 +143,34 @@ fun MainScreen(
                     HomeScreen(
                         onGameSelected = { game ->
                             viewModel.navigateToGameDetail(game.id.toString())
+                        },
+                        onProfileClick = {
+                            // Navigate to My Game tab instead of Profile screen
+                            viewModel.navigateTo(NavGraphBuilders.Routes.MY_GAME)
                         }
                     )
 //                    DefaultScreenContent("热门游戏", "该功能即将上线")
+                }
+                
+                // 历练（带动画）
+                composable(
+                    route = NavGraphBuilders.Routes.ADVENTURE,
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(300)) +
+                                slideInHorizontally(
+                                    initialOffsetX = { fullWidth -> fullWidth },
+                                    animationSpec = tween(300)
+                                )
+                    },
+                    exitTransition = {
+                        fadeOut(animationSpec = tween(300)) +
+                                slideOutHorizontally(
+                                    targetOffsetX = { fullWidth -> -fullWidth },
+                                    animationSpec = tween(300)
+                                )
+                    }
+                ) {
+                    AdventureScreen()
                 }
                 
                 // 我的游戏（带动画）
@@ -167,34 +192,8 @@ fun MainScreen(
                     }
                 ) {
                     MyGameScreen()
-                    //DefaultScreenContent("我的游戏", "该功能即将上线")
                 }
-                
-                // 排行榜（带动画）
-                composable(
-                    route = NavGraphBuilders.Routes.RANKING,
-                    enterTransition = {
-                        fadeIn(animationSpec = tween(300)) +
-                                slideInHorizontally(
-                                    initialOffsetX = { fullWidth -> fullWidth },
-                                    animationSpec = tween(300)
-                                )
-                    },
-                    exitTransition = {
-                        fadeOut(animationSpec = tween(300)) +
-                                slideOutHorizontally(
-                                    targetOffsetX = { fullWidth -> -fullWidth },
-                                    animationSpec = tween(300)
-                                )
-                    }
-                ) {
-                    RankingScreen(
-                        onGameSelected = { game ->
-                            viewModel.navigateToGameDetail(game.id)
-                        }
-                    )
-                }
-                
+
                 // 设置（带动画）
                 composable(
                     route = NavGraphBuilders.Routes.SETTING,
