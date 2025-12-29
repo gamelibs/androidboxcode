@@ -10,84 +10,41 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CloudDownload
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SportsEsports
-import androidx.compose.material.icons.filled.Update
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Divider
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.produceState
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Alignment
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.window.DialogProperties
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.draw.clip
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
-import com.example.gameboxone.R
 import com.example.gameboxone.data.model.Custom
-import com.example.gameboxone.data.model.UserLevelConfig
 import com.example.gameboxone.data.model.UserProfile
+import com.example.gameboxone.data.model.UserLevelConfig
+import com.example.gameboxone.R
 import com.example.gameboxone.data.viewmodel.MyGameViewModel
 import com.example.gameboxone.data.viewmodel.UserProfileViewModel
-import com.example.gameboxone.ui.component.HomeStatusHeader
-import com.example.gameboxone.manager.IconCacheManager
+import com.example.gameboxone.data.viewmodel.HomeViewModel
 import kotlinx.coroutines.launch
-import java.io.File
 
 private const val TAG = "MyGameScreen"
 
@@ -97,8 +54,14 @@ fun MyGameScreen(
     viewModel: MyGameViewModel = hiltViewModel(),
     userProfileViewModel: UserProfileViewModel = hiltViewModel()
 ) {
+    val homeViewModel: HomeViewModel = hiltViewModel()
+
     val uiState by viewModel.uiState.collectAsState()
     val profile by userProfileViewModel.profile.collectAsState()
+
+    // SDK version collected from ViewModel StateFlow so UI reflects updates
+    val sdkVersion by viewModel.sdkVersion.collectAsState()
+
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     
@@ -109,6 +72,7 @@ fun MyGameScreen(
     // 初次进入页面加载数据 - 使用LaunchedEffect(key1 = true)确保只执行一次
     LaunchedEffect(key1 = true) {
         Log.d(TAG, "MyGameScreen LaunchedEffect: 初始化加载数据")
+        Log.d(TAG, "MyGameScreen ViewModel instances: MyGameViewModel=${viewModel.hashCode()}, HomeViewModel=${homeViewModel.hashCode()}")
         viewModel.loadGameData()
     }
 
@@ -121,24 +85,9 @@ fun MyGameScreen(
         }
     }
     
-    // Delete Confirmation Dialog - 使用覆盖层样式，避免系统弹窗影响状态栏
-    if (showDeleteDialog && gameToDelete != null) {
-        ConfirmOverlayDialog(
-            visible = true,
-            title = "确认删除",
-            message = "确定要删除游戏 \"${gameToDelete?.name}\" 吗？此操作不可撤销。",
-            confirmText = "删除",
-            dismissText = "取消",
-            onConfirm = {
-                gameToDelete?.let { viewModel.deleteGame(it) }
-                showDeleteDialog = false
-                gameToDelete = null
-            },
-            onDismiss = {
-                showDeleteDialog = false
-                gameToDelete = null
-            }
-        )
+    // Log when sdkVersion changes so we can debug UI updates
+    LaunchedEffect(sdkVersion) {
+        Log.d(TAG, "UI observed sdkVersion = $sdkVersion")
     }
 
     Scaffold(
@@ -166,7 +115,10 @@ fun MyGameScreen(
                             level = currentLevel.level,
                             title = currentLevel.title,
                             exp = profile.exp,
-                            maxExp = nextLevel.requiredExp
+                            maxExp = nextLevel.requiredExp,
+                            sdkVersion = sdkVersion,
+                            onSdkUpdate = { homeViewModel.refreshSdkOnly() },
+                            onRefresh = { homeViewModel.syncGameConfig() }
                         )
                     }
 
@@ -190,6 +142,7 @@ fun MyGameScreen(
                     onDownload = { viewModel.downloadGame(it) },
                     onUpdate = { viewModel.updateGame(it) },
                     onDelete = { game ->
+                        Log.d(TAG, "点击删除: ${game.name} (${game.gameId})")
                         gameToDelete = game
                         showDeleteDialog = true
                     },
@@ -203,6 +156,27 @@ fun MyGameScreen(
                     modifier = Modifier.align(Alignment.Center)
                 )
             }
+
+            // Delete Confirmation Dialog - 放在内容之后，保证覆盖在列表之上
+            val pendingDeleteGame = gameToDelete
+            if (showDeleteDialog && pendingDeleteGame != null) {
+                ConfirmOverlayDialog(
+                    visible = true,
+                    title = "确认删除",
+                    message = "确定要删除游戏 \"${pendingDeleteGame.name}\" 吗？此操作不可撤销。",
+                    confirmText = "删除",
+                    dismissText = "取消",
+                    onConfirm = {
+                        viewModel.deleteGame(pendingDeleteGame)
+                        showDeleteDialog = false
+                        gameToDelete = null
+                    },
+                    onDismiss = {
+                        showDeleteDialog = false
+                        gameToDelete = null
+                    }
+                )
+            }
         }
     }
 }
@@ -212,7 +186,10 @@ fun UserProfileCard(
     level: Int,
     title: String,
     exp: Long,
-    maxExp: Long
+    maxExp: Long,
+    sdkVersion: String = "0.0.0",
+    onSdkUpdate: () -> Unit = {},
+    onRefresh: () -> Unit = {}
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -300,6 +277,39 @@ fun UserProfileCard(
                     color = Color.White,
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // SDK row: show version + action buttons
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "SDK: $sdkVersion",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.9f)
+                    )
+
+                    Row {
+                        IconButton(onClick = onSdkUpdate) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDownload,
+                                contentDescription = "SDK Update",
+                                tint = Color.White
+                            )
+                        }
+
+                        IconButton(onClick = onRefresh) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = "Refresh",
+                                tint = Color.White
+                            )
+                        }
+                    }
+                }
             }
         }
     }
@@ -403,6 +413,14 @@ fun EmptyGameList(onRefresh: () -> Unit) {
             style = MaterialTheme.typography.bodyLarge,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        Button(onClick = onRefresh) {
+            Icon(imageVector = Icons.Default.Refresh, contentDescription = "刷新")
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(text = "刷新")
+        }
 
         Spacer(modifier = Modifier.height(24.dp))
     }
@@ -641,7 +659,7 @@ fun GameItemCard(
                             .padding(top = 8.dp)
                     ) {
                         LinearProgressIndicator(
-                            progress = animatedProgress,
+                            progress = { animatedProgress },
                             modifier = Modifier.fillMaxWidth(),
                             color = MaterialTheme.colorScheme.primary,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant

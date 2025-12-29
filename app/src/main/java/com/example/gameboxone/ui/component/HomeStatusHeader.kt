@@ -105,6 +105,10 @@ fun HomeStatusHeader(
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
+                            // NOTE: SDK update and refresh buttons removed from Home header per request.
+                            // They are retained here as commented code for easy restoration.
+
+                            /*
                             // SDK Update Button (<=>)
                             FilledIconButton(
                                 onClick = onSdkUpdateClick,
@@ -136,6 +140,7 @@ fun HomeStatusHeader(
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
+                            */
                         }
                     }
                     

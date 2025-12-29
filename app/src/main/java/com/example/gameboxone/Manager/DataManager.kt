@@ -68,6 +68,120 @@ class DataManager @Inject constructor(
     private val CACHE_VALID_TIME = 5 * 60 * 1000 // 5分钟
 
     /**
+     * 从设置页手动覆盖环境（env/betaUrl/resUrl），动态切换 BASE_URL / REMOTE_CONFIG_URL。
+     *  - 会立即调用 NetManager.applyRemoteParams 更新内存中的网络参数
+     *  - 同时将最新的 base_url/sdk_url/sdk_file_name/remote_sdk_version/game_config_url 写入 app_config 表，
+     *    保证下次启动时 DataManager 仍能恢复到同一套环境。
+     */
+    suspend fun applyEnvOverrideFromSettings(
+        env: String,
+        betaUrl: String?,
+        resUrl: String?
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val normalizedEnv = env.lowercase().trim()
+            val beta = betaUrl?.trim()
+            val release = resUrl?.trim()
+
+            if ((beta.isNullOrBlank()) && (release.isNullOrBlank())) {
+                Log.w(TAG, "applyEnvOverrideFromSettings: beta/resUrl 均为空，跳过覆盖")
+                return@withContext
+            }
+
+            fun chooseBase(): String? {
+                return if (normalizedEnv == "beta") {
+                    beta ?: release
+                } else {
+                    release ?: beta
+                }?.trim()?.trimEnd('/')
+            }
+
+            fun rebaseUrl(chosenBase: String, url: String?): String? {
+                if (url.isNullOrBlank()) return null
+                return try {
+                    val trimmed = url.trim()
+                    if (trimmed.startsWith("http")) {
+                        val uri = java.net.URI(trimmed)
+                        val path = uri.rawPath ?: ""
+                        val query = uri.rawQuery?.let { "?$it" }.orEmpty()
+                        "${chosenBase.trimEnd('/')}${path}${query}"
+                    } else {
+                        "${chosenBase.trimEnd('/')}/${trimmed.trimStart('/')}"
+                    }
+                } catch (_: Exception) {
+                    // 兜底：尽量按相对路径拼接
+                    "${chosenBase.trimEnd('/')}/${url.trim().trimStart('/')}"
+                }
+            }
+
+            val chosenBase = chooseBase()
+            val effectiveSdkUrl = chosenBase?.let { rebaseUrl(it, netManager.getSdkUrl()) }
+            val effectiveGameConfigUrl = chosenBase?.let { rebaseUrl(it, netManager.getGameConfigUrl()) }
+
+            try {
+                netManager.applyRemoteParams(
+                    env = normalizedEnv,
+                    betaUrl = beta,
+                    resUrl = release,
+                    gameSdkUrl = effectiveSdkUrl ?: netManager.getSdkUrl(),
+                    sdkVersion = netManager.getRemoteSdkVersion(),
+                    gameSdkName = netManager.getSdkFileName(),
+                    gameConfigUrl = effectiveGameConfigUrl ?: netManager.getGameConfigUrl()
+                )
+                Log.d(
+                    TAG,
+                    "applyEnvOverrideFromSettings: 已应用 env=$normalizedEnv, beta=$beta, res=$release => base=${netManager.getBaseUrl()}"
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "applyEnvOverrideFromSettings: 调用 NetManager.applyRemoteParams 失败", e)
+                return@withContext
+            }
+
+            // 持久化最新的网络参数到 app_config
+            try {
+                database.appConfigDao().insertConfig(
+                    AppConfigItem(
+                        name = "base_url",
+                        value = netManager.getBaseUrl()
+                    )
+                )
+                database.appConfigDao().insertConfig(
+                    AppConfigItem(
+                        name = "sdk_url",
+                        value = netManager.getSdkUrl()
+                    )
+                )
+                database.appConfigDao().insertConfig(
+                    AppConfigItem(
+                        name = "sdk_file_name",
+                        value = netManager.getSdkFileName()
+                    )
+                )
+                database.appConfigDao().insertConfig(
+                    AppConfigItem(
+                        name = "remote_sdk_version",
+                        value = netManager.getRemoteSdkVersion()
+                    )
+                )
+                database.appConfigDao().insertConfig(
+                    AppConfigItem(
+                        name = "game_config_url",
+                        value = netManager.getGameConfigUrl()
+                    )
+                )
+                Log.d(
+                    TAG,
+                    "applyEnvOverrideFromSettings: 已将覆盖后的网络参数写入 DB (base/sdk_url/sdk_file_name/remote_sdk_version/game_config_url)"
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "applyEnvOverrideFromSettings: 写入 app_config 失败", e)
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "applyEnvOverrideFromSettings: 整体流程失败", e)
+        }
+    }
+
+    /**
      * 预加载应用启动需要的核心数据
      * 在应用启动时调用，预热数据缓存
      */
@@ -134,6 +248,12 @@ class DataManager @Inject constructor(
                         Log.d(TAG, "预加载路径：开始通过 fetchGameConfigFromNetwork 刷新远端配置")
                         val merged = fetchGameConfigFromNetwork()
                         Log.d(TAG, "预加载路径：远端刷新完成，最新数据量=${merged.size}")
+                        // 通知订阅方：远端刷新已完成（用于触发 SDK 版本等 UI 更新）
+                        try {
+                            eventManager.emitDataEvent(DataEvent.RefreshCompleted)
+                        } catch (e: Exception) {
+                            Log.w(TAG, "预加载路径：发送 RefreshCompleted 事件失败", e)
+                        }
                     } catch (e: Exception) {
                         Log.w(TAG, "预加载路径：后台刷新远端配置失败，继续使用本地缓冲数据", e)
                     }
@@ -178,7 +298,17 @@ class DataManager @Inject constructor(
                     Log.d(TAG, "fallback 路径：触发 SDK 对比/预加载")
                     applicationScope.launch(Dispatchers.IO) {
                         try {
-                            sdkManager.preloadSdk()
+                            val remoteSdkVersion = try {
+                                database.appConfigDao()
+                                    .getAllConfigs()
+                                    .find { it.name == "remote_sdk_version" }
+                                    ?.value
+                            } catch (e: Exception) {
+                                Log.w(TAG, "fallback 路径：读取 remote_sdk_version 失败，将以未知版本预加载 SDK", e)
+                                null
+                            }
+                            Log.d(TAG, "fallback 路径：预加载 SDK (remoteSdkVersion=$remoteSdkVersion)")
+                            sdkManager.preloadSdk(remoteSdkVersion)
                             Log.d(TAG, "fallback 路径：SDK 对比/预加载完成")
                         } catch (e: Exception) {
                             Log.w(TAG, "fallback 路径：触发 SDK 预加载失败", e)
@@ -444,6 +574,121 @@ class DataManager @Inject constructor(
             )
         } catch (e: Exception) {
             Log.w(TAG, "preloadSdkOnly: 整体流程失败", e)
+        }
+    }
+
+    /**
+     * 仅刷新 SDK，不动游戏列表数据（可选强制刷新）
+     */
+    suspend fun preloadSdkOnly(force: Boolean) {
+        try {
+            Log.d(TAG, "preloadSdkOnly(force=$force): 开始仅刷新 SDK")
+
+            // 1) 先检查实时网络状态
+            if (!netManager.checkNetworkNow()) {
+                Log.w(TAG, "preloadSdkOnly(force=$force): 网络不可用，跳过 SDK 刷新")
+                return
+            }
+
+            // 2) 确保 NetManager 已有可用的 base_url 等参数，并通过 /health 校验
+            val paramsOk = try {
+                applyParamsFromAssets()
+            } catch (e: Exception) {
+                Log.w(TAG, "preloadSdkOnly(force=$force): applyParamsFromAssets 失败", e)
+                false
+            }
+            if (!paramsOk) {
+                Log.w(TAG, "preloadSdkOnly(force=$force): 远端健康检查未通过，跳过 SDK 刷新")
+                return
+            }
+
+            // 3) 拉取远端配置（以获取最新 sdkVersion），但不改动本地游戏列表
+            val result = netManager.getGameList()
+            result.fold(
+                onSuccess = {
+                    // 成功拉取到远端数据，清除之前的失败提示标志
+                    remoteConfigFailureShown.set(false)
+
+                    // 3.1 将最新 params 持久化到 DB（与 preloadSdkOnly 中保持一致）
+                    try {
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "base_url", value = netManager.getBaseUrl()))
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "sdk_url", value = netManager.getSdkUrl()))
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "sdk_file_name", value = netManager.getSdkFileName()))
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "remote_sdk_version", value = netManager.getRemoteSdkVersion()))
+                        Log.d(TAG, "preloadSdkOnly(force=$force): 已将远端 params 写入 DB (base/sdk_url/sdk_file_name/remote_sdk_version)")
+                    } catch (e: Exception) {
+                        Log.w(TAG, "preloadSdkOnly(force=$force): 写入远端 params 到 DB 失败", e)
+                    }
+
+                    // 3.2 强制刷新：无视本地版本，直接触发 SDK 预加载（使用远端版本作为期望版本）
+                    val remoteSdkVersion = netManager.getRemoteSdkVersion()
+                    if (force) {
+                        Log.d(TAG, "preloadSdkOnly(force=true): 强制触发 SDK 预加载 (remote=$remoteSdkVersion)")
+                        applicationScope.launch(Dispatchers.IO) {
+                            try {
+                                sdkManager.preloadSdk(remoteSdkVersion.takeIf { it.isNotBlank() })
+                                Log.d(TAG, "preloadSdkOnly(force=true): SDK 预加载完成 (remote=$remoteSdkVersion)")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "preloadSdkOnly(force=true): SDK 预加载失败", e)
+                            }
+                        }
+                        return@fold
+                    }
+
+                    // 非强制：沿用原有逻辑（版本不同才更新）
+                    try {
+                        val localSdkVersion = try {
+                            val configs = database.appConfigDao().getAllConfigs()
+                            configs.find { it.name == "sdk_version" }?.value
+                        } catch (e: Exception) {
+                            Log.w(TAG, "preloadSdkOnly(force=false): 读取本地 sdk_version 失败", e)
+                            null
+                        }
+
+                        if (remoteSdkVersion.isNotBlank()) {
+                            if (remoteSdkVersion != localSdkVersion) {
+                                Log.d(TAG, "preloadSdkOnly(force=false): 检测到 SDK 版本变更，本地=$localSdkVersion, 远端=$remoteSdkVersion，触发 SDK 更新")
+                                applicationScope.launch(Dispatchers.IO) {
+                                    try {
+                                        sdkManager.preloadSdk(remoteSdkVersion)
+                                        Log.d(TAG, "preloadSdkOnly(force=false): SDK 版本更新完成，当前版本=$remoteSdkVersion")
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "preloadSdkOnly(force=false): SDK 版本更新失败", e)
+                                    }
+                                }
+                            } else {
+                                Log.d(TAG, "preloadSdkOnly(force=false): SDK 版本相同，无需更新 (version=$remoteSdkVersion)")
+                            }
+                        } else {
+                            Log.d(TAG, "preloadSdkOnly(force=false): 远端未返回 sdkVersion，跳过 SDK 版本对比")
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "preloadSdkOnly(force=false): SDK 版本对比或更新流程失败", e)
+                    }
+                },
+                onFailure = { error ->
+                    Log.e(TAG, "preloadSdkOnly(force=$force): 获取远端配置失败", error)
+                    if (remoteConfigFailureShown.compareAndSet(false, true)) {
+                        try {
+                            withContext(Dispatchers.Main) {
+                                messageService.showMessage(
+                                    UiMessage.Dialog(
+                                        title = "请求远程配置失败",
+                                        message = "无法从远端获取配置，请检查网络或域名是否可达。",
+                                        confirmAction = {},
+                                        cancelable = false,
+                                        dismissOnConfirm = true
+                                    )
+                                )
+                            }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "preloadSdkOnly(force=$force): 展示远端失败弹窗时出错", e)
+                        }
+                    }
+                }
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "preloadSdkOnly(force=$force): 整体流程失败", e)
         }
     }
 

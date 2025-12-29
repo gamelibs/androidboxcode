@@ -24,24 +24,32 @@ import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
+import com.example.gameboxone.manager.DataManager
+import org.json.JSONObject
 
 /**
  * 设置页面ViewModel
  */
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    @ApplicationContext private val appContext: Context
+    @ApplicationContext private val appContext: Context,
+    private val dataManager: DataManager
 ) : ViewModel() {
     private val TAG = "SettingsViewModel"
 
     // UI状态
     private val _uiState = MutableStateFlow(SettingsUiState())
     val uiState: StateFlow<SettingsUiState> = _uiState.asStateFlow()
+
+    private val _events = MutableSharedFlow<SettingsUiEvent>(extraBufferCapacity = 1)
+    val events: SharedFlow<SettingsUiEvent> = _events
 
     // 设置项状态
     var isDarkMode by mutableStateOf(false)
@@ -58,6 +66,16 @@ class SettingsViewModel @Inject constructor(
 
     // 新增：广告开关（控制 app_ads_on / ad_consent_enabled）
     var isAdsEnabled by mutableStateOf(true)
+        private set
+
+    // 环境与地址设置（env/betaUrl/resUrl）
+    var currentEnv by mutableStateOf("release")
+        private set
+
+    var betaUrl by mutableStateOf("")
+        private set
+
+    var releaseUrl by mutableStateOf("")
         private set
 
     // 临时存储缓存大小
@@ -78,6 +96,55 @@ class SettingsViewModel @Inject constructor(
                 // 默认开启广告：默认值为 true
                 val enabled = prefs.getBoolean("ad_consent_enabled", true)
                 isAdsEnabled = enabled
+
+                // 读取环境与地址配置（优先使用用户自定义，其次使用 assets/gameconfig.json 中的保底配置）
+                val storedEnv = prefs.getString("env_type", null)
+                val storedBeta = prefs.getString("env_beta_url", null)
+                val storedRelease = prefs.getString("env_release_url", null)
+
+                if (storedEnv != null || storedBeta != null || storedRelease != null) {
+                    currentEnv = storedEnv ?: "release"
+                    betaUrl = storedBeta.orEmpty()
+                    releaseUrl = storedRelease.orEmpty()
+                } else {
+                    // 从 assets/gameconfig.json 中尝试解析出默认 env/betaUrl/resUrl
+                    try {
+                        val jsonString = appContext.assets.open("gameconfig.json")
+                            .bufferedReader()
+                            .use { it.readText() }
+
+                        val root = JSONObject(jsonString)
+                        // 支持新旧两种结构：直接 params 或 data.params
+                        val container = if (root.has("data") && root.opt("data") is JSONObject) {
+                            root.getJSONObject("data")
+                        } else {
+                            root
+                        }
+                        val params = if (container.has("params") && container.opt("params") is JSONObject) {
+                            container.getJSONObject("params")
+                        } else {
+                            null
+                        }
+
+                        val envFromConfig = params?.optString("env")?.takeIf { it.isNotBlank() } ?: "release"
+                        // 支持多种命名（beta / betaUrl）和（resUrl / release）
+                        val betaFromConfig = params?.optString("betaUrl")
+                            ?.takeIf { it.isNotBlank() }
+                            ?: params?.optString("beta")?.takeIf { it.isNotBlank() }
+                        val releaseFromConfig = params?.optString("resUrl")
+                            ?.takeIf { it.isNotBlank() }
+                            ?: params?.optString("release")?.takeIf { it.isNotBlank() }
+
+                        currentEnv = envFromConfig
+                        betaUrl = betaFromConfig.orEmpty()
+                        releaseUrl = releaseFromConfig.orEmpty()
+                    } catch (_: Exception) {
+                        // 解析失败时使用默认值
+                        currentEnv = "release"
+                        betaUrl = ""
+                        releaseUrl = ""
+                    }
+                }
             } catch (_: Exception) {
                 // 读不到时保持默认 true
                 isAdsEnabled = true
@@ -95,6 +162,89 @@ class SettingsViewModel @Inject constructor(
                 com.example.gameboxone.AppLog.d(TAG, "切换广告开关: enabled=$enabled")
             } catch (_: Exception) {
                 // 忽略持久化异常，保持内存状态
+            }
+        }
+    }
+
+    // 更新当前选择的环境（beta/release）
+    fun updateEnv(env: String) {
+        currentEnv = env.lowercase()
+    }
+
+    fun updateBetaUrl(url: String) {
+        betaUrl = url
+    }
+
+    fun updateReleaseUrl(url: String) {
+        releaseUrl = url
+    }
+
+    /**
+     * 将当前在设置页中配置的环境和地址应用到网络层：
+     *  - 持久化到 SharedPreferences，便于下次启动恢复
+     *  - 调用 DataManager/NetManager 更新 BASE_URL / REMOTE_CONFIG_URL
+     */
+    fun applyEnvSettings(context: Context) {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isApplyingEnv = true)
+                val env = currentEnv.lowercase().trim().ifBlank { "release" }
+                val beta = betaUrl.trim()
+                val release = releaseUrl.trim()
+
+                // 先将配置写入 SharedPreferences
+                val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+                prefs.edit()
+                    .putString("env_type", env)
+                    .putString("env_beta_url", beta)
+                    .putString("env_release_url", release)
+                    .apply()
+
+                // 当 beta/release 地址全部为空时，视为不覆盖，直接返回
+                if (beta.isBlank() && release.isBlank()) {
+                    com.example.gameboxone.AppLog.w(TAG, "applyEnvSettings: beta/release 地址均为空，跳过网络参数覆盖")
+                    _events.tryEmit(SettingsUiEvent.Snackbar("环境配置已保存，但地址为空，未应用网络切换"))
+                    return@launch
+                }
+
+                // 调用 DataManager，使用当前 env + 地址更新 NetManager，并同步写入 app_config
+                try {
+                    dataManager.applyEnvOverrideFromSettings(
+                        env = env,
+                        betaUrl = beta.takeIf { it.isNotBlank() },
+                        resUrl = release.takeIf { it.isNotBlank() }
+                    )
+                    val chosenBase = if (env == "beta") {
+                        beta.ifBlank { release }
+                    } else {
+                        release.ifBlank { beta }
+                    }.trim().trimEnd('/')
+                    _events.tryEmit(SettingsUiEvent.Snackbar("环境已应用：${env.uppercase()}（$chosenBase），正在刷新游戏列表和 SDK..."))
+                    com.example.gameboxone.AppLog.d(
+                        TAG,
+                        "applyEnvSettings: 已应用环境配置 env=$env, beta=$beta, release=$release"
+                    )
+
+                    // 触发一次完整刷新：拉取新地址下的 gameconfig，并触发 SDK 更新/预加载
+                    try {
+                        dataManager.refreshAllData(isInitialLoad = false)
+                    } catch (e: Exception) {
+                        com.example.gameboxone.AppLog.w(TAG, "applyEnvSettings: 刷新游戏列表失败", e)
+                    }
+                    try {
+                        dataManager.preloadSdkOnly(force = true)
+                    } catch (e: Exception) {
+                        com.example.gameboxone.AppLog.w(TAG, "applyEnvSettings: 刷新 SDK 失败", e)
+                    }
+                } catch (e: Exception) {
+                    com.example.gameboxone.AppLog.w(TAG, "applyEnvSettings: 应用环境配置失败", e)
+                    _events.tryEmit(SettingsUiEvent.Snackbar("应用环境失败：${e.message ?: "未知错误"}"))
+                }
+            } catch (e: Exception) {
+                com.example.gameboxone.AppLog.w(TAG, "applyEnvSettings: 整体流程失败", e)
+                _events.tryEmit(SettingsUiEvent.Snackbar("应用环境失败：${e.message ?: "未知错误"}"))
+            } finally {
+                _uiState.value = _uiState.value.copy(isApplyingEnv = false)
             }
         }
     }
@@ -216,8 +366,13 @@ class SettingsViewModel @Inject constructor(
  */
 data class SettingsUiState(
     val isLoading: Boolean = false,
-    val showClearCacheDialog: Boolean = false
+    val showClearCacheDialog: Boolean = false,
+    val isApplyingEnv: Boolean = false
 )
+
+sealed class SettingsUiEvent {
+    data class Snackbar(val message: String) : SettingsUiEvent()
+}
 
 /**
  * 设置页面主组件
@@ -230,10 +385,19 @@ fun SettingScreen(
     val uiState by viewModel.uiState.collectAsState()
     val cacheSize by viewModel.cacheSize.collectAsState()
     val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
 
     // 首次进入设置页时，从 SharedPreferences 加载广告开关状态
     LaunchedEffect(Unit) {
         viewModel.loadSettings(context)
+    }
+
+    LaunchedEffect(Unit) {
+        viewModel.events.collect { event ->
+            when (event) {
+                is SettingsUiEvent.Snackbar -> snackbarHostState.showSnackbar(event.message)
+            }
+        }
     }
 
     // 对话框状态
@@ -241,6 +405,7 @@ fun SettingScreen(
     var showAboutDialog by remember { mutableStateOf(false) }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
         // topBar removed
     ) { innerPadding ->
         LazyColumn(
@@ -316,6 +481,21 @@ fun SettingScreen(
                     onCheckedChange = { enabled ->
                         viewModel.toggleAdsEnabled(context, enabled)
                     }
+                )
+            }
+
+            // 环境与地址设置
+            item {
+                SettingSectionHeader(title = "环境设置")
+                EnvSettingsCard(
+                    currentEnv = viewModel.currentEnv,
+                    betaUrl = viewModel.betaUrl,
+                    releaseUrl = viewModel.releaseUrl,
+                    onEnvChange = { env -> viewModel.updateEnv(env) },
+                    onBetaUrlChange = { url -> viewModel.updateBetaUrl(url) },
+                    onReleaseUrlChange = { url -> viewModel.updateReleaseUrl(url) },
+                    isApplying = uiState.isApplyingEnv,
+                    onApplyClick = { viewModel.applyEnvSettings(context) }
                 )
             }
 
@@ -560,6 +740,110 @@ fun SettingsClickableItem(
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
+        }
+    }
+}
+
+/**
+ * 环境与地址设置卡片（beta/release 切换 + 地址编辑）
+ */
+@Composable
+fun EnvSettingsCard(
+    currentEnv: String,
+    betaUrl: String,
+    releaseUrl: String,
+    onEnvChange: (String) -> Unit,
+    onBetaUrlChange: (String) -> Unit,
+    onReleaseUrlChange: (String) -> Unit,
+    isApplying: Boolean = false,
+    onApplyClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        shape = RoundedCornerShape(12.dp)
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Text(
+                text = "环境选择",
+                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onEnvChange("beta") }
+                ) {
+                    RadioButton(
+                        selected = currentEnv.lowercase() == "beta",
+                        onClick = { onEnvChange("beta") }
+                    )
+                    Text(text = "Beta", style = MaterialTheme.typography.bodyMedium)
+                }
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.clickable { onEnvChange("release") }
+                ) {
+                    RadioButton(
+                        selected = currentEnv.lowercase() != "beta",
+                        onClick = { onEnvChange("release") }
+                    )
+                    Text(text = "Release", style = MaterialTheme.typography.bodyMedium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Beta 地址",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = betaUrl,
+                onValueChange = onBetaUrlChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "Release 地址",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedTextField(
+                value = releaseUrl,
+                onValueChange = onReleaseUrlChange,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                singleLine = true,
+                textStyle = LocalTextStyle.current.copy(fontSize = 12.sp)
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Button(
+                modifier = Modifier.align(Alignment.End),
+                onClick = onApplyClick,
+                enabled = !isApplying
+            ) {
+                Text(text = if (isApplying) "应用中..." else "应用环境")
+            }
         }
     }
 }

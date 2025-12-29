@@ -66,7 +66,7 @@ fun AppTopBar(
                 )
                 // 经验进度条
                 LinearProgressIndicator(
-                    progress = progress,
+                    progress = { progress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)

@@ -33,6 +33,10 @@ class MyGameViewModel @Inject constructor(
     private val _uiState = MutableStateFlow(MyGameState())
     val uiState: StateFlow<MyGameState> = _uiState.asStateFlow()
 
+    // SDK version exposed as StateFlow so UI can observe changes
+    private val _sdkVersion = MutableStateFlow("0.0.0")
+    val sdkVersion = _sdkVersion.asStateFlow()
+
     // 添加标记，防止重复加载
     private var isDataLoaded = false
     // 添加加载中标记，避免并发加载
@@ -42,6 +46,18 @@ class MyGameViewModel @Inject constructor(
         // 注册事件监听
         eventManager.registerSubscriber()
 
+        fun refreshSdkVersionFromDb(reason: String) {
+            viewModelScope.launch {
+                try {
+                    val v = getSdkVersion()
+                    _sdkVersion.value = v
+                    Log.d(TAG, "SDK 版本刷新($reason): $v")
+                } catch (e: Exception) {
+                    Log.w(TAG, "SDK 版本刷新失败($reason)", e)
+                }
+            }
+        }
+
         // 监听数据事件
         viewModelScope.launch {
             eventManager.dataEvents.collect { event ->
@@ -50,15 +66,23 @@ class MyGameViewModel @Inject constructor(
                         _uiState.value = _uiState.value.copy(isLoading = true)
                     }
                     is DataEvent.Initialized -> {
+                        // 初始化完成后，远端/保底 params 可能刚写入 DB，此时刷新一次 SDK 版本显示
+                        refreshSdkVersionFromDb("Initialized")
                         // 首次初始化时仍然遵守“仅当未加载时才加载”的约束
                         if (!isDataLoaded) {
                             loadGameData()
                         }
                     }
                     is DataEvent.RefreshCompleted -> {
+                        // 远端刷新完成后，params 与 remote_sdk_version 可能更新，刷新 SDK 版本显示
+                        refreshSdkVersionFromDb("RefreshCompleted")
                         // 远程刷新完成后，必须重新加载“我的游戏”以重新计算 hasUpdate
                         isDataLoaded = false
                         loadGameData()
+                    }
+                    is DataEvent.SdkLoaded -> {
+                        // 当 SDK 加载/更新完成时，重新读取 DB 中的 sdk_version 并推送到 Flow
+                        refreshSdkVersionFromDb("SdkLoaded")
                     }
                     is DataEvent.Error -> {
                         _uiState.value = _uiState.value.copy(
@@ -73,6 +97,9 @@ class MyGameViewModel @Inject constructor(
 
         // 加载初始数据 - 只在初始化时主动加载一次
         loadGameData()
+
+        // 读取并发布初始 SDK 版本到 Flow
+        refreshSdkVersionFromDb("Init")
     }
 
     /**
@@ -290,6 +317,28 @@ class MyGameViewModel @Inject constructor(
                     error = "启动游戏失败: ${e.message}"
                 )
             }
+        }
+    }
+
+    /**
+     * 获取当前 SDK 版本（从 app_config 表中读取 sdk_version 或 remote_sdk_version）
+     */
+    suspend fun getSdkVersion(): String {
+        return try {
+            val configs = database.appConfigDao().getAllConfigs()
+            val local = configs.find { it.name == "sdk_version" }?.value?.trim().orEmpty()
+            val remote = configs.find { it.name == "remote_sdk_version" }?.value?.trim().orEmpty()
+
+            // 优先展示“有意义”的版本号：
+            // - 如果本地 sdk_version 为空或仍是默认 0.0.0，则回退展示 remote_sdk_version（如 1.1.0）
+            // - 否则展示本地 sdk_version（代表已落盘的 SDK 版本）
+            when {
+                local.isBlank() || local == "0.0.0" -> remote.ifBlank { "0.0.0" }
+                else -> local
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "读取 SDK 版本失败", e)
+            "0.0.0"
         }
     }
 
