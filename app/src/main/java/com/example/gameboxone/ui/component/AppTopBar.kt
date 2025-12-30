@@ -60,7 +60,7 @@ fun AppTopBar(
                     )
                 }
                 Text(
-                    text = levelText,
+                    text = profile.nickname?.takeIf { it.isNotBlank() } ?: levelText,
                     style = MaterialTheme.typography.titleLarge,
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )

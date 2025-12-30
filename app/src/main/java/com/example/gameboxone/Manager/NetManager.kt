@@ -29,9 +29,15 @@ import java.util.concurrent.atomic.AtomicBoolean
 import okhttp3.Call
 import okhttp3.Callback
 import okhttp3.Request
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import com.example.gameboxone.data.model.PlayerLoginRequest
+import com.example.gameboxone.data.model.PlayerLoginResponse
+import com.example.gameboxone.data.model.PlayerMeResponse
+import com.example.gameboxone.data.model.PlayerSdkResponse
 
 @Singleton
 class NetManager @Inject constructor(
@@ -159,11 +165,201 @@ class NetManager @Inject constructor(
         }
     }
 
+    suspend fun loginPlayer(groupId: String, deviceId: String, nickname: String): Result<PlayerLoginResponse> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) {
+            Log.e(TAG, "网络不可用，无法注册玩家")
+            return@withContext Result.failure(IOException("网络不可用"))
+        }
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) {
+            return@withContext Result.failure(IOException("BASE_URL is blank"))
+        }
+        val url = "$base/api/v1/player/login"
+        return@withContext try {
+            val bodyJson = Gson().toJson(PlayerLoginRequest(groupId = groupId, deviceId = deviceId, nickname = nickname))
+            val mediaType = "application/json; charset=utf-8".toMediaType()
+            val request = Request.Builder()
+                .url(url)
+                .post(bodyJson.toRequestBody(mediaType))
+                .build()
+
+            val responseBody = suspendCancellableCoroutine<String> { continuation ->
+                httpClient.newCall(request).enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (!continuation.isCompleted) continuation.resumeWithException(e)
+                    }
+
+                    override fun onResponse(call: Call, response: okhttp3.Response) {
+                        if (continuation.isCompleted) return
+                        try {
+                            val text = response.body?.string().orEmpty()
+                            if (!response.isSuccessful) {
+                                continuation.resumeWithException(IOException("HTTP ${response.code}: $text"))
+                                return
+                            }
+                            continuation.resume(text)
+                        } catch (e: Exception) {
+                            continuation.resumeWithException(e)
+                        }
+                    }
+                })
+            }
+
+            // 兼容包装结构：{ data: { ... } }
+            val gson = Gson()
+            val root = gson.fromJson(responseBody, JsonElement::class.java)
+            val payload = if (root != null && root.isJsonObject && root.asJsonObject.has("data") && root.asJsonObject.get("data").isJsonObject) {
+                root.asJsonObject.getAsJsonObject("data").toString()
+            } else {
+                responseBody
+            }
+
+            val parsed = gson.fromJson(payload, PlayerLoginResponse::class.java)
+            Result.success(parsed)
+        } catch (e: Exception) {
+            Log.e(TAG, "登录玩家失败: ${e.message}")
+            Result.failure(e)
+        }
+    }
+
+    class HttpStatusException(
+        val code: Int,
+        val body: String
+    ) : IOException("HTTP $code: $body")
+
+    /**
+     * 自动登录：获取当前 token 对应的玩家信息
+     * GET /api/v1/player/me
+     */
+    suspend fun getPlayerMe(token: String): Result<PlayerMeResponse> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) {
+            return@withContext Result.failure(IOException("网络不可用"))
+        }
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) {
+            return@withContext Result.failure(IOException("BASE_URL is blank"))
+        }
+        val url = "$base/api/v1/player/me"
+        return@withContext try {
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("Authorization", "Bearer $token")
+                .build()
+
+            val responseBody = suspendCancellableCoroutine<String> { continuation ->
+                httpClient.newCall(request).enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (!continuation.isCompleted) continuation.resumeWithException(e)
+                    }
+
+                    override fun onResponse(call: Call, response: okhttp3.Response) {
+                        if (continuation.isCompleted) return
+                        try {
+                            val text = response.body?.string().orEmpty()
+                            if (!response.isSuccessful) {
+                                continuation.resumeWithException(HttpStatusException(response.code, text))
+                                return
+                            }
+                            continuation.resume(text)
+                        } catch (e: Exception) {
+                            continuation.resumeWithException(e)
+                        }
+                    }
+                })
+            }
+
+            // 兼容包装结构：{ data: { ... } }
+            val gson = Gson()
+            val root = gson.fromJson(responseBody, JsonElement::class.java)
+            val payload = if (root != null && root.isJsonObject && root.asJsonObject.has("data") && root.asJsonObject.get("data").isJsonObject) {
+                root.asJsonObject.getAsJsonObject("data").toString()
+            } else {
+                responseBody
+            }
+            val parsed = gson.fromJson(payload, PlayerMeResponse::class.java)
+            Result.success(parsed)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * 将JSON转换为特定类型
      */
     inline fun <reified T> parseJson(json: String): T {
         return Gson().fromJson(json, object : TypeToken<T>() {}.type)
+    }
+
+    /**
+     * 获取 SDK 信息（需要 token）
+     * GET /api/v1/player/sdk
+     */
+    suspend fun getPlayerSdk(token: String): Result<PlayerSdkResponse> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) {
+            return@withContext Result.failure(IOException("网络不可用"))
+        }
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) {
+            return@withContext Result.failure(IOException("BASE_URL is blank"))
+        }
+        val url = "$base/api/v1/player/sdk"
+        return@withContext try {
+            val request = Request.Builder()
+                .url(url)
+                .get()
+                .header("Authorization", "Bearer ${token.trim()}")
+                .build()
+
+            val responseBody = suspendCancellableCoroutine<String> { continuation ->
+                httpClient.newCall(request).enqueue(object : Callback {
+                    override fun onFailure(call: Call, e: IOException) {
+                        if (!continuation.isCompleted) continuation.resumeWithException(e)
+                    }
+
+                    override fun onResponse(call: Call, response: okhttp3.Response) {
+                        if (continuation.isCompleted) return
+                        try {
+                            val text = response.body?.string().orEmpty()
+                            if (!response.isSuccessful) {
+                                continuation.resumeWithException(HttpStatusException(response.code, text))
+                                return
+                            }
+                            continuation.resume(text)
+                        } catch (e: Exception) {
+                            continuation.resumeWithException(e)
+                        }
+                    }
+                })
+            }
+
+            // 兼容包装结构：{ data: { ... } }
+            val gson = Gson()
+            val root = gson.fromJson(responseBody, JsonElement::class.java)
+            val payload = if (root != null && root.isJsonObject && root.asJsonObject.has("data") && root.asJsonObject.get("data").isJsonObject) {
+                root.asJsonObject.getAsJsonObject("data").toString()
+            } else {
+                responseBody
+            }
+
+            val parsed = gson.fromJson(payload, PlayerSdkResponse::class.java)
+            Result.success(parsed)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * 仅更新 SDK URL/版本/文件名，不改动 BASE_URL/REMOTE_CONFIG_URL。
+     */
+    fun applySdkInfo(sdkUrl: String, sdkVersion: String?) {
+        try {
+            val url = sdkUrl.trim()
+            val fileName = url.substringAfterLast('/').takeIf { it.isNotBlank() }
+            updateSdkOnly(url, sdkVersion?.trim(), fileName)
+        } catch (e: Exception) {
+            Log.e(TAG, "applySdkInfo failed", e)
+        }
     }
 
     /**
@@ -249,11 +445,19 @@ class NetManager @Inject constructor(
     /**
      * 获取并解析游戏列表
      */
-    suspend fun getGameList(): Result<List<GameConfigItem>> = withContext(Dispatchers.IO) {
-        if (REMOTE_CONFIG_URL.isBlank()) {
-            Log.w(TAG, "REMOTE_CONFIG_URL is blank, cannot fetch game list")
-            return@withContext Result.failure(IOException("REMOTE_CONFIG_URL is blank"))
+    /**
+     * 获取并解析游戏列表（需要用户 token）：
+     * GET /api/v1/player/published-games
+     */
+    suspend fun getGameList(token: String): Result<List<GameConfigItem>> = withContext(Dispatchers.IO) {
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) {
+            Log.w(TAG, "BASE_URL is blank, cannot fetch game list")
+            return@withContext Result.failure(IOException("BASE_URL is blank"))
         }
+        val url = "$base/api/v1/player/published-games"
+        val masked = token.trim().let { t -> if (t.length <= 10) "***" else (t.take(6) + "…" + t.takeLast(4)) }
+        Log.d(TAG, "getGameList(token): GET $url, Authorization=Bearer $masked")
          var attempt = 0
          var lastException: Exception? = null
 
@@ -269,8 +473,9 @@ class NetManager @Inject constructor(
                     .build()
 
                 val request = Request.Builder()
-                    .url(REMOTE_CONFIG_URL) // 旧的配置文件URL（可能被动态覆盖）
+                    .url(url)
                     .get()
+                    .header("Authorization", "Bearer ${token.trim()}")
                     .build()
 
                 // 执行请求
@@ -284,14 +489,13 @@ class NetManager @Inject constructor(
 
                         override fun onResponse(call: Call, response: okhttp3.Response) {
                             if (!continuation.isCompleted) {
-                                if (!response.isSuccessful) {
-                                    continuation.resumeWithException(IOException("HTTP ${response.code}"))
-                                    return
-                                }
-
                                 try {
                                     val responseBody = response.body?.string()
                                     if (responseBody != null) {
+                                        if (!response.isSuccessful) {
+                                            continuation.resumeWithException(HttpStatusException(response.code, responseBody))
+                                            return
+                                        }
                                         continuation.resume(responseBody)
                                     } else {
                                         continuation.resumeWithException(IOException("Empty response"))
@@ -308,9 +512,10 @@ class NetManager @Inject constructor(
                     }
                 }
 
-                // 解析JSON - 支持两种格式：
+                // 解析JSON - 支持多种格式：
                 //  1) 旧格式：{ "params": {...}, "gamelist": [ ... ] }
                 //  2) 新格式：{ "success": true, "data": { "params": {...}, "gamelist": [ ... ] } }
+                //  3) 玩家列表：{ "code": 200, "platformId": "1018", "data": { "params": {...}, "gamelist": [ ... ] } }
                 val gson = Gson()
                 val parsedList: List<GameConfigItem> = try {
                     val jsonElement: JsonElement = gson.fromJson(response, JsonElement::class.java)
@@ -328,26 +533,30 @@ class NetManager @Inject constructor(
                         rootObj
                     }
 
-                    // 必须存在 params
-                    val paramsObj = container.getAsJsonObject("params")
-                        ?: throw IOException("配置中缺少 'params' 字段")
-
-                    val env = paramsObj.getAsJsonPrimitive("env")?.asString ?: ""
-                    val betaUrl = paramsObj.getAsJsonPrimitive("betaUrl")?.asString
-                    val resUrl = paramsObj.getAsJsonPrimitive("resUrl")?.asString
-                    val gameSdkUrl = paramsObj.getAsJsonPrimitive("gameSdkUrl")?.asString
-                    val gameSdkName = paramsObj.getAsJsonPrimitive("gameSdkName")?.asString
-                    val gameConfigUrl = paramsObj.getAsJsonPrimitive("gameConfigUrl")?.asString
-
-                    val sdkVersion = paramsObj.getAsJsonPrimitive("sdkVersion")?.asString
-
-                    val chosenBase = if (env.lowercase().trim() == "beta") {
-                        betaUrl ?: resUrl ?: BASE_URL
+                    // params 可能为空（例如仅返回 gamelist），有则解析并更新网络参数
+                    val paramsObj: JsonObject? = if (container.has("params") && container.get("params").isJsonObject) {
+                        container.getAsJsonObject("params")
                     } else {
-                        resUrl ?: betaUrl ?: BASE_URL
+                        null
                     }
+                    if (paramsObj != null && paramsObj.entrySet().isNotEmpty()) {
+                        val env = paramsObj.getAsJsonPrimitive("env")?.asString ?: ""
+                        val betaUrl = paramsObj.getAsJsonPrimitive("betaUrl")?.asString
+                        val resUrl = paramsObj.getAsJsonPrimitive("resUrl")?.asString
+                        val gameSdkUrl = paramsObj.getAsJsonPrimitive("gameSdkUrl")?.asString
+                        val gameSdkName = paramsObj.getAsJsonPrimitive("gameSdkName")?.asString
+                        val gameConfigUrl = paramsObj.getAsJsonPrimitive("gameConfigUrl")?.asString
+                        val sdkVersion = paramsObj.getAsJsonPrimitive("sdkVersion")?.asString
 
-                    updateBaseUrls(chosenBase, gameSdkUrl, sdkVersion, gameSdkName, gameConfigUrl)
+                        val chosenBase = if (env.lowercase().trim() == "beta") {
+                            betaUrl ?: resUrl ?: BASE_URL
+                        } else {
+                            resUrl ?: betaUrl ?: BASE_URL
+                        }
+                        updateBaseUrls(chosenBase, gameSdkUrl, sdkVersion, gameSdkName, gameConfigUrl)
+                    } else {
+                        Log.d(TAG, "getGameList: params missing/empty, skip updating base urls")
+                    }
 
                     // 必须存在 gamelist
                     val listElement = container.getAsJsonArray("gamelist")
@@ -377,6 +586,119 @@ class NetManager @Inject constructor(
         }
 
         Log.e(TAG, "获取游戏列表失败，已达到最大重试次数")
+        return@withContext Result.failure(lastException ?: IOException("未知错误"))
+    }
+
+    /**
+     * 旧的游戏列表接口（无需 token）：请求 REMOTE_CONFIG_URL 并解析 params/gamelist
+     * 用于登录失败时的回退逻辑。
+     */
+    suspend fun getGameListLegacy(): Result<List<GameConfigItem>> = withContext(Dispatchers.IO) {
+        if (REMOTE_CONFIG_URL.isBlank()) {
+            Log.w(TAG, "REMOTE_CONFIG_URL is blank, cannot fetch legacy game list")
+            return@withContext Result.failure(IOException("REMOTE_CONFIG_URL is blank"))
+        }
+        val legacyUrl = REMOTE_CONFIG_URL
+        Log.d(TAG, "getGameListLegacy: GET $legacyUrl")
+        var attempt = 0
+        var lastException: Exception? = null
+
+        while (attempt < MAX_RETRIES) {
+            try {
+                Log.d(TAG, "尝试获取游戏列表(legacy) (${attempt + 1}/$MAX_RETRIES)")
+
+                val client = httpClient.newBuilder()
+                    .connectTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                    .readTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                    .writeTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+                    .build()
+
+                val request = Request.Builder()
+                    .url(legacyUrl)
+                    .get()
+                    .build()
+
+                val response = suspendCancellableCoroutine<String> { continuation ->
+                    client.newCall(request).enqueue(object : Callback {
+                        override fun onFailure(call: Call, e: IOException) {
+                            if (!continuation.isCompleted) continuation.resumeWithException(e)
+                        }
+
+                        override fun onResponse(call: Call, response: okhttp3.Response) {
+                            if (continuation.isCompleted) return
+                            try {
+                                val text = response.body?.string().orEmpty()
+                                if (!response.isSuccessful) {
+                                    continuation.resumeWithException(HttpStatusException(response.code, text))
+                                    return
+                                }
+                                continuation.resume(text)
+                            } catch (e: Exception) {
+                                continuation.resumeWithException(e)
+                            }
+                        }
+                    })
+
+                    continuation.invokeOnCancellation {
+                        client.dispatcher.cancelAll()
+                    }
+                }
+
+                // 解析JSON - 支持两种格式：
+                //  1) 旧格式：{ "params": {...}, "gamelist": [ ... ] }
+                //  2) 新格式：{ "success": true, "data": { "params": {...}, "gamelist": [ ... ] } }
+                val gson = Gson()
+                val parsedList: List<GameConfigItem> = try {
+                    val jsonElement: JsonElement = gson.fromJson(response, JsonElement::class.java)
+                    if (!jsonElement.isJsonObject) throw IOException("配置格式错误：顶层不是 JSON 对象")
+                    val rootObj: JsonObject = jsonElement.asJsonObject
+                    val container: JsonObject = if (rootObj.has("data") && rootObj.get("data").isJsonObject) {
+                        rootObj.getAsJsonObject("data")
+                    } else {
+                        rootObj
+                    }
+
+                    val paramsObj = container.getAsJsonObject("params") ?: throw IOException("配置中缺少 'params' 字段")
+                    val env = paramsObj.getAsJsonPrimitive("env")?.asString ?: ""
+                    val betaUrl = paramsObj.getAsJsonPrimitive("betaUrl")?.asString
+                    val resUrl = paramsObj.getAsJsonPrimitive("resUrl")?.asString
+                    val gameSdkUrl = paramsObj.getAsJsonPrimitive("gameSdkUrl")?.asString
+                    val gameSdkName = paramsObj.getAsJsonPrimitive("gameSdkName")?.asString
+                    val gameConfigUrl = paramsObj.getAsJsonPrimitive("gameConfigUrl")?.asString
+                    val sdkVersion = paramsObj.getAsJsonPrimitive("sdkVersion")?.asString
+
+                    val chosenBase = if (env.lowercase().trim() == "beta") {
+                        betaUrl ?: resUrl ?: BASE_URL
+                    } else {
+                        resUrl ?: betaUrl ?: BASE_URL
+                    }
+                    updateBaseUrls(chosenBase, gameSdkUrl, sdkVersion, gameSdkName, gameConfigUrl)
+
+                    val listElement = container.getAsJsonArray("gamelist")
+                        ?: throw IOException("配置中缺少 'gamelist' 字段或它不是数组")
+                    val type = object : TypeToken<List<GameConfigItem>>() {}.type
+                    gson.fromJson(listElement, type)
+                } catch (e: Exception) {
+                    Log.e(TAG, "解析游戏列表(legacy)失败", e)
+                    throw e
+                }
+
+                Log.d(TAG, "成功获取游戏列表(legacy): ${parsedList.size} 个游戏")
+                return@withContext Result.success(parsedList)
+            } catch (e: Exception) {
+                lastException = e
+                Log.e(TAG, "获取游戏列表(legacy)失败 (${attempt + 1}/$MAX_RETRIES): ${e.message}")
+                attempt++
+
+                if (attempt < MAX_RETRIES) {
+                    val delayTime = RETRY_DELAY_MILLIS * attempt
+                    Log.d(TAG, "等待 ${delayTime}ms 后重试(legacy)")
+                    delay(delayTime)
+                }
+            }
+        }
+
+        Log.e(TAG, "获取游戏列表(legacy)失败，已达到最大重试次数")
         return@withContext Result.failure(lastException ?: IOException("未知错误"))
     }
 
@@ -732,6 +1054,23 @@ class NetManager @Inject constructor(
                 TAG,
                 "Updated BASE_URL=$BASE_URL, SDK_URL=$SDK_URL, REMOTE_CONFIG_URL=$REMOTE_CONFIG_URL, REMOTE_SDK_VERSION=$REMOTE_SDK_VERSION, SDK_FILE_NAME=$SDK_FILE_NAME"
             )
+        }
+
+        private fun updateSdkOnly(
+            sdkUrl: String?,
+            sdkVersion: String?,
+            sdkFileName: String?
+        ) {
+            if (!sdkUrl.isNullOrBlank()) {
+                SDK_URL = sdkUrl.trim()
+            }
+            if (!sdkVersion.isNullOrBlank()) {
+                REMOTE_SDK_VERSION = sdkVersion
+            }
+            if (!sdkFileName.isNullOrBlank()) {
+                SDK_FILE_NAME = sdkFileName
+            }
+            Log.d(TAG, "Updated SDK only: SDK_URL=$SDK_URL, REMOTE_SDK_VERSION=$REMOTE_SDK_VERSION, SDK_FILE_NAME=$SDK_FILE_NAME")
         }
 
         // Provide getters for other components

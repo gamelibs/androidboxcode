@@ -325,9 +325,8 @@ class MyGameViewModel @Inject constructor(
      */
     suspend fun getSdkVersion(): String {
         return try {
-            val configs = database.appConfigDao().getAllConfigs()
-            val local = configs.find { it.name == "sdk_version" }?.value?.trim().orEmpty()
-            val remote = configs.find { it.name == "remote_sdk_version" }?.value?.trim().orEmpty()
+            val local = database.appConfigDao().getLatestValue("sdk_version")?.trim().orEmpty()
+            val remote = database.appConfigDao().getLatestValue("remote_sdk_version")?.trim().orEmpty()
 
             // 优先展示“有意义”的版本号：
             // - 如果本地 sdk_version 为空或仍是默认 0.0.0，则回退展示 remote_sdk_version（如 1.1.0）

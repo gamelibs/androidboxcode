@@ -28,6 +28,9 @@ import com.example.gameboxone.data.model.UserLevelConfig
 @Composable
 fun HomeStatusHeader(
     userExp: Long,
+    loginStatusText: String? = null,
+    onLoginStatusClick: (() -> Unit)? = null,
+    loginStatusColor: Color = MaterialTheme.colorScheme.onSurfaceVariant,
     onSdkUpdateClick: () -> Unit,
     onRefreshClick: () -> Unit,
     onProfileClick: () -> Unit = {},
@@ -100,6 +103,19 @@ fun HomeStatusHeader(
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onSurface
                         )
+
+                        if (!loginStatusText.isNullOrBlank()) {
+                            Text(
+                                text = loginStatusText,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = loginStatusColor,
+                                modifier = if (onLoginStatusClick != null) {
+                                    Modifier.clickable(onClick = onLoginStatusClick)
+                                } else {
+                                    Modifier
+                                }
+                            )
+                        }
                         
                         // Action Buttons Row
                         Row(

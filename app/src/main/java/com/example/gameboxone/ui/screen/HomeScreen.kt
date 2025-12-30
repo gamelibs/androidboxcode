@@ -36,6 +36,7 @@ import com.example.gameboxone.data.model.UserLevelConfig
 import com.example.gameboxone.ui.component.GameCardEnhanced
 import com.example.gameboxone.ui.component.HomeStatusHeader
 import java.io.File
+import com.example.gameboxone.manager.UserManager
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,6 +48,8 @@ fun HomeScreen(
     val uiState by viewModel.uiState.collectAsState()
     val profileViewModel: UserProfileViewModel = hiltViewModel()
     val profile by profileViewModel.profile.collectAsState()
+    val authState by profileViewModel.authState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
     
     // Pull to refresh state
     val pullRefreshState = rememberPullToRefreshState()
@@ -54,6 +57,12 @@ fun HomeScreen(
     if (pullRefreshState.isRefreshing) {
         LaunchedEffect(true) {
             viewModel.syncGameConfig()
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        profileViewModel.events.collect { msg ->
+            snackbarHostState.showSnackbar(message = msg)
         }
     }
     
@@ -67,9 +76,22 @@ fun HomeScreen(
     }
 
     Scaffold(
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
         topBar = {
+            val (loginText, loginColor, loginClickable) = when (authState) {
+                UserManager.AuthState.LOGGING_IN -> Triple("登录中…", MaterialTheme.colorScheme.primary, false)
+                UserManager.AuthState.LOGGED_IN -> Triple("已登录", MaterialTheme.colorScheme.tertiary, false)
+                UserManager.AuthState.TOKEN_INVALID -> Triple("登录失效，点我重试", MaterialTheme.colorScheme.error, true)
+                UserManager.AuthState.ERROR -> Triple("登录失败", MaterialTheme.colorScheme.error, true)
+                UserManager.AuthState.GUEST -> Triple("未登录", MaterialTheme.colorScheme.onSurfaceVariant, true)
+                else -> Triple(null, MaterialTheme.colorScheme.onSurfaceVariant, false)
+            }
+
             HomeStatusHeader(
                 userExp = profile.exp,
+                loginStatusText = loginText,
+                loginStatusColor = loginColor,
+                onLoginStatusClick = if (loginClickable) onProfileClick else null,
                 onSdkUpdateClick = viewModel::refreshSdkOnly,
                 onRefreshClick = viewModel::syncGameConfig,
                 onProfileClick = onProfileClick,

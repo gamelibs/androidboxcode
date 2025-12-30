@@ -116,6 +116,10 @@ fun MyGameScreen(
                             title = currentLevel.title,
                             exp = profile.exp,
                             maxExp = nextLevel.requiredExp,
+                            nickname = profile.nickname ?: "玩家",
+                            coins = profile.coins,
+                            serverLevel = profile.level,
+                            expPercent = profile.expPercent,
                             sdkVersion = sdkVersion,
                             onSdkUpdate = { homeViewModel.refreshSdkOnly() },
                             onRefresh = { homeViewModel.syncGameConfig() }
@@ -138,6 +142,9 @@ fun MyGameScreen(
                     downloadingGameId = uiState.downloadingGameId,
                     downloadProgress = uiState.downloadProgress,
                     deletingGameId = uiState.deletingGameId,
+                    sdkVersion = sdkVersion,
+                    onSdkUpdate = { homeViewModel.refreshSdkOnly() },
+                    onRefresh = { homeViewModel.syncGameConfig() },
                     onPlay = { viewModel.playGame(it) },
                     onDownload = { viewModel.downloadGame(it) },
                     onUpdate = { viewModel.updateGame(it) },
@@ -187,6 +194,10 @@ fun UserProfileCard(
     title: String,
     exp: Long,
     maxExp: Long,
+    nickname: String = "玩家",
+    coins: Int? = null,
+    serverLevel: Int? = null,
+    expPercent: Int? = null,
     sdkVersion: String = "0.0.0",
     onSdkUpdate: () -> Unit = {},
     onRefresh: () -> Unit = {}
@@ -226,7 +237,7 @@ fun UserProfileCard(
 
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "玩家",
+                        text = nickname.ifBlank { "玩家" },
                         style = MaterialTheme.typography.titleLarge,
                         color = Color.White,
                         fontWeight = FontWeight.Bold
@@ -239,7 +250,11 @@ fun UserProfileCard(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Text(
-                            text = "Lv.$level $title",
+                            text = if (serverLevel != null) {
+                                "Lv.$serverLevel"
+                            } else {
+                                "Lv.$level $title"
+                            },
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             color = Color.White,
                             style = MaterialTheme.typography.labelMedium
@@ -262,14 +277,24 @@ fun UserProfileCard(
                         color = Color.White.copy(alpha = 0.8f)
                     )
                     Text(
-                        text = "$exp / $maxExp",
+                        text = if (expPercent != null) {
+                            "${expPercent.coerceIn(0, 100)}%"
+                        } else {
+                            "$exp / $maxExp"
+                        },
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.8f)
                     )
                 }
                 Spacer(modifier = Modifier.height(6.dp))
                 LinearProgressIndicator(
-                    progress = { (exp.toFloat() / maxExp.toFloat()).coerceIn(0f, 1f) },
+                    progress = {
+                        if (expPercent != null) {
+                            (expPercent.coerceIn(0, 100) / 100f)
+                        } else {
+                            (exp.toFloat() / maxExp.toFloat()).coerceIn(0f, 1f)
+                        }
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(6.dp)
@@ -286,11 +311,20 @@ fun UserProfileCard(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                        text = "SDK: $sdkVersion",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White.copy(alpha = 0.9f)
-                    )
+                    Column {
+                        Text(
+                            text = "SDK: $sdkVersion",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = Color.White.copy(alpha = 0.9f)
+                        )
+                        coins?.let { c ->
+                            Text(
+                                text = "金币: $c",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White.copy(alpha = 0.85f)
+                            )
+                        }
+                    }
 
                     Row {
                         IconButton(onClick = onSdkUpdate) {
@@ -432,6 +466,9 @@ fun GameList(
     downloadingGameId: String?,
     downloadProgress: Float,
     deletingGameId: String?,
+    sdkVersion: String = "0.0.0",
+    onSdkUpdate: () -> Unit = {},
+    onRefresh: () -> Unit = {},
     onPlay: (Custom.MyGameData) -> Unit,
     onDownload: (Custom.MyGameData) -> Unit,
     onUpdate: (Custom.MyGameData) -> Unit,
@@ -452,7 +489,14 @@ fun GameList(
                 level = currentLevel.level,
                 title = currentLevel.title,
                 exp = userProfile.exp,
-                maxExp = nextLevel.requiredExp
+                maxExp = nextLevel.requiredExp,
+                nickname = userProfile.nickname ?: "玩家",
+                coins = userProfile.coins,
+                serverLevel = userProfile.level,
+                expPercent = userProfile.expPercent,
+                sdkVersion = sdkVersion,
+                onSdkUpdate = onSdkUpdate,
+                onRefresh = onRefresh
             )
         }
 

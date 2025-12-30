@@ -7,6 +7,7 @@ import android.widget.Toast
 import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.SdkManager
 import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.UserManager
 import com.example.gameboxone.ui.CrashHandlerActivity
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -46,6 +47,9 @@ class App : Application(){
 
     @Inject
     lateinit var eventManager: EventManager
+
+    @Inject
+    lateinit var userManager: UserManager
 
     companion object {
         private const val TAG = "App"
@@ -109,6 +113,14 @@ class App : Application(){
                  // Preload application data (may load from DB or fallback)
                  // preloadAppData 会负责：判断缓存、保底加载（如果 DB 为空）、并在适当时机使用已应用的 params 向远端请求并对比更新。
                  dataManager.preloadAppData()
+
+                 // 用户注册/登录：拿到 token 与玩家信息，供任务/等级/金币等功能使用
+                 try {
+                     // 若已有 token，则先走 /me 自动登录；若 401 则自动重新注册获取 token
+                     userManager.ensurePlayerSession()
+                 } catch (e: Exception) {
+                     Log.w(TAG, "玩家注册失败（将继续以游客状态运行）", e)
+                 }
              } catch (e: Exception) {
                  // 预加载失败时仅记录日志，不上抛（容错策略）
                  Log.e(TAG, "应用数据预加载失败", e)

@@ -14,6 +14,9 @@ interface AppConfigDao {
     @Query("SELECT * FROM app_config")
     suspend fun getAllConfigs(): List<AppConfigItem>
 
+    @Query("SELECT value FROM app_config WHERE name = :name ORDER BY id DESC LIMIT 1")
+    suspend fun getLatestValue(name: String): String?
+
     /**
      * 删除所有游戏
      */

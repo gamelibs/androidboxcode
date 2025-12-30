@@ -5,6 +5,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
 import com.example.gameboxone.manager.UserManager
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import com.example.gameboxone.data.model.UserProfile
 
 /**
@@ -16,5 +17,6 @@ class UserProfileViewModel @Inject constructor(
 ) : ViewModel() {
 
     val profile: StateFlow<UserProfile> = userManager.profile
+    val authState: StateFlow<UserManager.AuthState> = userManager.authState
+    val events: SharedFlow<String> = userManager.events
 }
-

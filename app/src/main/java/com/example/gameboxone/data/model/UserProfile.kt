@@ -7,6 +7,15 @@ package com.example.gameboxone.data.model
  */
 data class UserProfile(
     val id: String,
-    val exp: Long
+    val exp: Long,
+    // 服务端玩家信息（可选，应用启动后注册/登录成功会填充）
+    val playerId: String? = null,
+    val groupId: String? = null,
+    val nickname: String? = null,
+    val level: Int? = null,
+    val expPercent: Int? = null,
+    val coins: Int? = null,
+    val createdAt: String? = null,
+    val token: String? = null,
+    val tokenExpiresAt: String? = null
 )
-
