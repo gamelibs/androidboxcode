@@ -8,8 +8,12 @@ import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.state.MyGameState
 import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.event.GameEvent
+import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.IconCacheManager
 import com.example.gameboxone.manager.MyGameManager
+import com.example.gameboxone.manager.NetManager
+import com.example.gameboxone.utils.ModelConverter
 import com.example.gameboxone.WebViewActivity
 import com.example.gameboxone.base.AppDatabase
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -25,8 +29,11 @@ private const val TAG = "MyGameViewModel"
 @HiltViewModel
 class MyGameViewModel @Inject constructor(
     private val myGameManager: MyGameManager,
+    private val dataManager: DataManager,
     private val eventManager: EventManager,
     private val database: AppDatabase,
+    private val netManager: NetManager,
+    val iconCacheManager: IconCacheManager,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     // UI 状态
@@ -41,34 +48,22 @@ class MyGameViewModel @Inject constructor(
     private var isDataLoaded = false
     // 添加加载中标记，避免并发加载
     private var isLoading = false
+    // 标记“我的游戏”页是否正在主动执行远端刷新，避免 RefreshCompleted 再触发一次本地加载
+    private var isRefreshingFromMyGame = false
 
     init {
         // 注册事件监听
         eventManager.registerSubscriber()
 
-        fun refreshSdkVersionFromDb(reason: String) {
-            viewModelScope.launch {
-                try {
-                    val v = getSdkVersion()
-                    _sdkVersion.value = v
-                    Log.d(TAG, "SDK 版本刷新($reason): $v")
-                } catch (e: Exception) {
-                    Log.w(TAG, "SDK 版本刷新失败($reason)", e)
-                }
-            }
-        }
-
         // 监听数据事件
         viewModelScope.launch {
             eventManager.dataEvents.collect { event ->
                 when (event) {
-                    is DataEvent.RefreshStarted -> {
-                        _uiState.value = _uiState.value.copy(isLoading = true)
-                    }
+                    // RefreshStarted 不再设置 isLoading，避免与 loadGameData 产生双 spinner
                     is DataEvent.Initialized -> {
                         // 初始化完成后，远端/保底 params 可能刚写入 DB，此时刷新一次 SDK 版本显示
                         refreshSdkVersionFromDb("Initialized")
-                        // 首次初始化时仍然遵守“仅当未加载时才加载”的约束
+                        // 首次初始化时仍然遵守"仅当未加载时才加载"的约束
                         if (!isDataLoaded) {
                             loadGameData()
                         }
@@ -76,7 +71,11 @@ class MyGameViewModel @Inject constructor(
                     is DataEvent.RefreshCompleted -> {
                         // 远端刷新完成后，params 与 remote_sdk_version 可能更新，刷新 SDK 版本显示
                         refreshSdkVersionFromDb("RefreshCompleted")
-                        // 远程刷新完成后，必须重新加载“我的游戏”以重新计算 hasUpdate
+                        if (isRefreshingFromMyGame) {
+                            Log.d(TAG, "跳过 RefreshCompleted 自动 loadGameData：当前由 MyGame.refreshAll() 自行收尾")
+                            return@collect
+                        }
+                        // 远程刷新完成后，必须重新加载"我的游戏"以重新计算 hasUpdate
                         isDataLoaded = false
                         loadGameData()
                     }
@@ -102,6 +101,39 @@ class MyGameViewModel @Inject constructor(
         refreshSdkVersionFromDb("Init")
     }
 
+    /** 将图标相对路径解析为完整 URL；绝对 URL 原样返回 */
+    private fun resolveIconUrl(rawUrl: String): String {
+        if (rawUrl.isBlank()) return rawUrl
+        return if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+            rawUrl
+        } else {
+            try {
+                netManager.resolveResourceUrl(rawUrl.trimStart('/'))
+            } catch (e: Exception) {
+                Log.w(TAG, "图标 URL 解析失败: $rawUrl", e)
+                rawUrl
+            }
+        }
+    }
+
+    private fun refreshSdkVersionFromDb(reason: String) {
+        viewModelScope.launch {
+            try {
+                val v = getSdkVersion()
+                _sdkVersion.value = v
+                Log.d(TAG, "SDK 版本刷新($reason): $v")
+            } catch (e: Exception) {
+                Log.w(TAG, "SDK 版本刷新失败($reason)", e)
+            }
+        }
+    }
+
+    /** 优先使用 downicon，其次使用 icon，并统一解析为完整 URL */
+    private fun resolveDisplayIconUrl(item: com.example.gameboxone.data.model.GameConfigItem): String {
+        val preferred = item.downicon?.takeIf { it.isNotBlank() } ?: item.icon
+        return resolveIconUrl(preferred)
+    }
+
     /**
      * 加载游戏数据 - 强化防重复机制并只加载已安装的游戏，同时检查更新
      */
@@ -118,12 +150,27 @@ class MyGameViewModel @Inject constructor(
                 Log.d(TAG, "开始加载已安装游戏数据...")
                 _uiState.value = _uiState.value.copy(isLoading = true, error = null)
 
-                // 这里直接使用 MyGameManager.getAllGames()，它已经根据远程 game_config 写好了 hasUpdate 状态
+                // 已安装游戏（含 hasUpdate 状态）
                 val installedGames = myGameManager.getAllGames()
                 Log.d(TAG, "已安装游戏数量: ${installedGames.size}个")
 
+                // 全部游戏（完整目录），合并已安装状态
+                val allConfigItems = dataManager.getGameConfigItems()
+                val installedById = installedGames.associateBy { it.gameId }
+                val allGames = allConfigItems.map { item ->
+                    val installed = installedById[item.gameId]
+                    // 已安装的游戏保留原始数据（iconUrl 已由 MyGameManager 解析为完整 URL）
+                    // 未安装的游戏优先使用 downicon，并解析为完整 URL
+                    installed ?: ModelConverter.toMyGameData(item).copy(
+                        isLocal = item.isLocal,
+                        iconUrl = resolveDisplayIconUrl(item)
+                    )
+                }
+                Log.d(TAG, "全部游戏数量: ${allGames.size}个")
+
                 _uiState.value = _uiState.value.copy(
                     games = installedGames,
+                    allGames = allGames,
                     isLoading = false
                 )
 
@@ -288,6 +335,55 @@ class MyGameViewModel @Inject constructor(
         Log.d(TAG, "手动刷新游戏列表")
         isDataLoaded = false // 重置加载标记，允许重新加载
         loadGameData() // 重新加载数据
+    }
+
+    /**
+     * 从远端刷新数据后重新加载游戏列表（替代 homeViewModel.syncGameConfig()）
+     * 仅在 MyGameScreen 的"刷新"按钮中调用，保证 loading 状态由本 ViewModel 统一管理
+     */
+    fun refreshAll() {
+        if (isLoading) return
+        viewModelScope.launch {
+            try {
+                isRefreshingFromMyGame = true
+                isLoading = true
+                // 远端 refresh 时使用全局 loading，避免与 MainScreen 的全局圈叠加出两个 loading
+                _uiState.value = _uiState.value.copy(error = null)
+                // 触发远端数据刷新（会通过事件总线通知所有订阅方）
+                try {
+                    dataManager.refreshAllData(isInitialLoad = false)
+                } catch (e: Exception) {
+                    Log.w(TAG, "refreshAll: 远程刷新失败，仍继续加载本地数据", e)
+                }
+                // 刷新本地游戏列表
+                val installedGames = myGameManager.getAllGames()
+                val allConfigItems = dataManager.getGameConfigItems()
+                val installedById = installedGames.associateBy { it.gameId }
+                val allGames = allConfigItems.map { item ->
+                    val installed = installedById[item.gameId]
+                    installed ?: ModelConverter.toMyGameData(item).copy(
+                        isLocal = item.isLocal,
+                        iconUrl = resolveDisplayIconUrl(item)
+                    )
+                }
+                _uiState.value = _uiState.value.copy(
+                    games = installedGames,
+                    allGames = allGames,
+                    isLoading = false
+                )
+                isDataLoaded = true
+                refreshSdkVersionFromDb("refreshAll")
+            } catch (e: Exception) {
+                Log.e(TAG, "refreshAll: 刷新游戏数据失败", e)
+                _uiState.value = _uiState.value.copy(
+                    isLoading = false,
+                    error = "刷新失败: ${e.message}"
+                )
+            } finally {
+                isRefreshingFromMyGame = false
+                isLoading = false
+            }
+        }
     }
 
     /**

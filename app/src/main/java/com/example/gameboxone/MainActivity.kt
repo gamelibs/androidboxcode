@@ -1,23 +1,31 @@
 package com.example.gameboxone
 
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import com.example.gameboxone.ui.theme.GameboxoneTheme
 import com.example.gameboxone.ui.theme.ThemeManager
+import com.example.gameboxone.ui.screen.LaunchConsentScreen
 import com.example.gameboxone.ui.screen.MainScreen
 import dagger.hilt.android.AndroidEntryPoint
 import androidx.core.view.WindowCompat
@@ -26,9 +34,16 @@ import androidx.core.view.WindowInsetsCompat
 import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.ads.AdHostActivity
 import com.example.gameboxone.ads.AdManager
+import com.example.gameboxone.ads.ConsentManager
+import com.example.gameboxone.legal.LegalConfig
+import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+    @Inject
+    lateinit var consentManager: ConsentManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -43,17 +58,45 @@ class MainActivity : ComponentActivity() {
         val prefs = getSharedPreferences("game_preferences", MODE_PRIVATE)
         val darkEnabled = prefs.getBoolean("dark_mode_enabled", false)
         ThemeManager.setDarkTheme(darkEnabled)
+        AdManager.setAdsEnabled(prefs.getBoolean("ad_consent_enabled", true))
+
+        val initialLegalAccepted = LegalConfig.hasAcceptedRequiredAgreements(this)
 
         setContent {
             // 订阅全局深色模式状态，切换时触发重组
             val isDark by ThemeManager.isDarkTheme.collectAsState()
+            var hasAcceptedLegal by remember { mutableStateOf(initialLegalAccepted) }
+            val snackbarHostState = remember { SnackbarHostState() }
+            val scope = rememberCoroutineScope()
 
             GameboxoneTheme(darkTheme = isDark) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    if (hasAcceptedLegal) {
+                        MainScreen()
+                    } else {
+                        Box(modifier = Modifier.fillMaxSize()) {
+                            LaunchConsentScreen(
+                                onAccepted = {
+                                    LegalConfig.markAcceptedRequiredAgreements(this@MainActivity)
+                                    hasAcceptedLegal = true
+                                    initializeAdsIfEligible()
+                                },
+                                onExit = { finish() },
+                                onOpenFailed = { message ->
+                                    scope.launch { snackbarHostState.showSnackbar(message) }
+                                }
+                            )
+                            SnackbarHost(
+                                hostState = snackbarHostState,
+                                modifier = Modifier
+                                    .align(Alignment.BottomCenter)
+                                    .padding(bottom = 24.dp)
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -65,9 +108,19 @@ class MainActivity : ComponentActivity() {
     override fun onStart() {
         super.onStart()
 
-        // 使用开发模式初始化广告：假定已获得同意并使用测试广告位
-        Log.d("MainActivity", "[Ads] onStart -> initializeForDevAssumeConsent")
-        AdManager.initializeForDevAssumeConsent(applicationContext)
+        initializeAdsIfEligible()
+    }
+
+    private fun initializeAdsIfEligible() {
+        if (!LegalConfig.hasAcceptedRequiredAgreements(this)) {
+            Log.d("MainActivity", "未同意应用协议，跳过广告初始化")
+            return
+        }
+
+        AdManager.onAppForegrounded()
+
+        Log.d("MainActivity", "[Ads] initializeWithConsent")
+        AdManager.initializeWithConsent(this, consentManager)
 
         val canShowNow = AdManager.canShowAppOpenNow()
         val isReady = AdManager.isAppOpenReady()
@@ -85,31 +138,6 @@ class MainActivity : ComponentActivity() {
         } else {
             Log.d("MainActivity", "[Ads] 当前不可显示开屏广告，将依赖 AdManager 的预加载与后续触发")
         }
-
-        // 延迟几秒检查一次预载结果：仅在“广告环境不可用 且 所有广告类型都未准备好”时才提示失败
-        Handler(Looper.getMainLooper()).postDelayed({
-            val canShowAds = AdManager.canShowAds()
-            val anyReady = AdManager.isAppOpenReady() ||
-                    AdManager.isInterstitialReady() ||
-                    AdManager.isRewardedReady()
-
-            Log.d(
-                "MainActivity",
-                "[Ads] 预载检查: canShowAds=$canShowAds, anyReady=$anyReady, appOpenReady=${AdManager.isAppOpenReady()}, interstitialReady=${AdManager.isInterstitialReady()}, rewardedReady=${AdManager.isRewardedReady()}"
-            )
-
-            // 更温和的失败判定：只有在广告环境本身不可用并且所有广告类型都未就绪时才认为初始化失败
-            if (!canShowAds && !anyReady) {
-                // 使用系统 Toast 提示广告初始化失败，保证在大多数环境下都能看到
-                Toast.makeText(
-                    this,
-                    "广告初始化失败：当前设备的广告环境可能不完整，广告可能无法正常展示。",
-                    Toast.LENGTH_LONG
-                ).show()
-            } else {
-                Log.d("MainActivity", "[Ads] 预载检查通过，至少有一种广告类型已准备好")
-            }
-        }, 5_000)
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {

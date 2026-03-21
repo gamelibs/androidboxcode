@@ -4,8 +4,10 @@ import com.example.gameboxone.AppLog as Log
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import com.example.gameboxone.WebViewActivity
+import com.example.gameboxone.event.TaskEvent
 import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.LocalAdventureManager
 import com.example.gameboxone.manager.ResourceManager
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.data.model.Custom
@@ -15,6 +17,7 @@ import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.manager.MyGameManager
 import com.example.gameboxone.navigation.NavigationEvent
 import com.example.gameboxone.service.MessageService
+import com.example.gameboxone.ui.navigation.NavGraphBuilders
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -36,11 +39,10 @@ class GameDetailViewModel @Inject constructor(
     eventManager: EventManager,
     private val messageService: MessageService,
     private val myGameManager: MyGameManager,
-    @ApplicationContext private val context: Context,  // 添加Context注入
+    private val localAdventureManager: LocalAdventureManager,
+    @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : GameViewModel(eventManager) {
-
-
 
     // 从导航参数中获取游戏ID
     val gameId: String = checkNotNull(savedStateHandle["gameId"]) {
@@ -50,6 +52,18 @@ class GameDetailViewModel @Inject constructor(
     // 实现父类要求的状态流
     override val _state = MutableStateFlow(GameDetailState())
     val state: StateFlow<GameDetailState> = _state.asStateFlow()
+
+    init {
+        // 监听任务领奖事件：任务结算完成后自动返回主界面，无需回到详情页
+        viewModelScope.launch {
+            eventManager.taskEvents.collect { event ->
+                if (event is TaskEvent.TaskClaimed) {
+                    Log.d(TAG, "收到 TaskClaimed，自动返回主界面")
+                    eventManager.emitNavigationEvent(NavigationEvent.PopBackStack)
+                }
+            }
+        }
+    }
 
     /**
      * 加载游戏详情
@@ -68,27 +82,31 @@ class GameDetailViewModel @Inject constructor(
                 val gameData = dataManager.getCachedGameData(gameId)
 
                 if (gameData != null) {
-                    // 创建完整的HotGameData对象，而不是只包含ID的空对象
-//                    val hotGameData = Custom.HotGameData(
-//                        id = gameData.id,
-//                        name = gameData.name,
-//                        gameId = gameData.gameId ?: gameData.id,
-//                        gameRes = gameData.gameRes ?: "",
-//                        description = gameData.description ?: "",
-//                        iconUrl = gameData.iconUrl,
-//                        downloadUrl = gameData.downloadUrl ?: "",
-//                        isLocal = gameData.isLocal,
-//                        localPath = gameData.localPath ?: "",
-//                        rating = gameData.rating ?: 0,
-//                        patch = gameData.patch ?: 1
-//                    )
-                    
+                    // 同步加载该游戏在当前章节中的历练任务（若有）
+                    val adventureTask = localAdventureManager.getTaskForGame(
+                        gameData.gameId ?: gameData.id
+                    )
+                    // 检查是否有版本更新（已安装游戏才需要检查）
+                    val hasUpdate = if (gameData.isLocal) {
+                        try {
+                            val installedGames = myGameManager.getAllGames()
+                            installedGames.firstOrNull {
+                                it.gameId == (gameData.gameId ?: gameData.id) || it.id == gameData.id
+                            }?.hasUpdate ?: false
+                        } catch (e: Exception) {
+                            Log.w(TAG, "检查更新状态失败", e)
+                            false
+                        }
+                    } else false
+
                     _state.value = GameDetailState(
                         game = gameData,
+                        adventureTask = adventureTask,
                         isLoading = false,
-                        error = null
+                        error = null,
+                        hasUpdate = hasUpdate
                     )
-                    Log.d(TAG, "游戏详情加载成功: ${gameData.name}, 详细信息已保存到state")
+                    Log.d(TAG, "游戏详情加载成功: ${gameData.name}, 历练任务: ${adventureTask?.taskTitle ?: "无"}, hasUpdate=$hasUpdate")
 
                 } else {
                     handleError("未找到游戏数据")
@@ -221,7 +239,7 @@ class GameDetailViewModel @Inject constructor(
                     is GameResourceState.Available -> {
                         // 资源已就绪，直接启动
                         Log.d(TAG, "游戏资源已就绪，直接启动: ${game.name}, path=${resourceState.localPath}")
-                        WebViewActivity.start(context, resourceState.localPath, game.id)
+                        WebViewActivity.start(context, resourceState.localPath, game.gameId ?: game.id)
                     }
 
                     is GameResourceState.LoadingFromBackup -> {
@@ -237,7 +255,7 @@ class GameDetailViewModel @Inject constructor(
                         // 通过 MyGameManager 进行安装（包含 DB 记录和事件）
                         myGameManager.installGameFromBackup(game).onSuccess { localPath ->
                             Log.d(TAG, "保底资源安装成功，写入我的游戏并启动: ${game.name}, path=$localPath")
-                            WebViewActivity.start(context, localPath, game.id)
+                            WebViewActivity.start(context, localPath, game.gameId ?: game.id)
                         }.onFailure { error ->
                             Log.w(TAG, "保底资源安装失败，尝试网络下载: ${game.name}", error)
                             handleError("从本地资源加载失败: ${error.message}")
@@ -307,7 +325,7 @@ class GameDetailViewModel @Inject constructor(
                 myGameManager.installGameFromBackup(game).fold(
                     onSuccess = { localPath ->
                         Log.d(TAG, "从本地资源成功加载并记录游戏: ${game.name}, path=$localPath")
-                        WebViewActivity.start(context, localPath, game.id)
+                        WebViewActivity.start(context, localPath, game.gameId ?: game.id)
                         setState { copy(isLoading = false, loadingMessage = null) }
                     },
                     onFailure = { error ->
@@ -390,7 +408,7 @@ class GameDetailViewModel @Inject constructor(
                         )
 
                         // 下载完成后直接启动游戏
-                        WebViewActivity.start(context, localPath, game.id)
+                        WebViewActivity.start(context, localPath, game.gameId ?: game.id)
 
                         setState {
                             copy(

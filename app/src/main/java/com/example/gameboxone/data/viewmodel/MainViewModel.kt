@@ -88,6 +88,13 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // 导航到历练任务详情
+    fun navigateToAdventureTaskDetail(taskId: String) {
+        viewModelScope.launch {
+            eventManager.emitNavigationEvent(NavigationEvent.NavigateToAdventureTaskDetail(taskId))
+        }
+    }
+
 //    // 示例: 导航到游戏播放
 //    fun navigateToGamePlayer(gameId: String, localPath: String) {
 //        viewModelScope.launch {

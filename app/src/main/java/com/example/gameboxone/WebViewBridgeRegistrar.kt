@@ -2,11 +2,10 @@ package com.example.gameboxone
 
 import android.content.Context
 import android.content.pm.ApplicationInfo
-import android.util.Log
 import android.webkit.WebView
+import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.callback.AndroidEventCallBack
 import com.example.gameboxone.webview.GameInfoUIModule
-import kotlin.jvm.javaClass
 import kotlin.let
 import kotlin.text.trimIndent
 
@@ -57,10 +56,6 @@ object WebViewBridgeRegistrar {
 
     /**
      * 注册所有 JavaScript 桥接接口
-     * 重点说明：
-     * - 使用 addJavascriptInterface 时请确保暴露的类只包含需要的方法，且在方法实现中做足够的校验与异常处理。
-     * - 尽量避免在接口中直接处理任意 eval/exec 请求；若必须暴露执行能力，请做白名单/权限校验。
-     * - 本方法把回调与事件发送的能力封装为 `AndroidEventCallBack`，并通过 `GameDataBridge` 统一处理业务事件。
      */
     @Suppress("UNUSED_PARAMETER")
     private fun registerBridges(
@@ -68,19 +63,10 @@ object WebViewBridgeRegistrar {
         activityProvider: () -> WebViewActivity,
         uiModule: GameInfoUIModule?
     ) {
-        // 保持对 activityProvider 的轻量引用以避免 "未使用参数" 的编译警告，且不执行实际 provider() 调用以避免副作用。
-        @Suppress("UNUSED_VARIABLE")
-        val _activityProviderRef = activityProvider.hashCode()
-
-        // 为了解决静态分析器在调用处发出的警告，我们尽量安全地调用 activityProvider() 一次，
-        // 但要捕获任何异常并避免对得到的 Activity 做副作用操作。
-        try {
-            val maybeActivity = try { activityProvider() } catch (t: Throwable) { null }
-            // 仅做非侵入式检查，例如记录类名，避免触发生命周期方法
-            maybeActivity?.javaClass?.name?.let { _ -> /* intentionally no-op */ }
-        } catch (e: Exception) {
-            // 忽略，调用仅为标记参数已被使用
-        }
+        // 安全地从 activityProvider 获取 gameId 和任务处理器
+        val activity = try { activityProvider() } catch (_: Throwable) { null }
+        val gameId = activity?.exposedGameId
+        val taskHandler = activity?.gameTaskEventHandler
 
 
         try {
@@ -97,7 +83,9 @@ object WebViewBridgeRegistrar {
             // 将 uiModule 和 eventCallBack 传入 GameDataBridge
             // 说明：GameDataBridge 是将具体业务（如游戏存档、统计、配置）提供给 H5 的受控接口。
             //    - H5 通过 window.CpsenseAppEvent.<method> 调用原生能力，GameDataBridge 在内部应进行参数和来源校验。
-            val gameBridge = com.example.gameboxone.game.GameDataBridge(uiModule, eventCallBack)
+            val gameBridge = com.example.gameboxone.game.GameDataBridge(
+                uiModule, eventCallBack, taskHandler, gameId
+            )
             webView.addJavascriptInterface(gameBridge, "CpsenseAppEvent")
             Log.d(TAG, "JavaScript interface 'CpsenseAppEvent' registered successfully")
 

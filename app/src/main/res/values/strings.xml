@@ -1,3 +1,25 @@
 <resources>
     <string name="app_name">gameboxone</string>
+    <string name="legal_privacy_policy">隐私政策</string>
+    <string name="legal_user_agreement">用户协议</string>
+    <string name="webview_error_missing_game_path">没有提供游戏路径，无法启动游戏</string>
+    <string name="webview_error_game_dir_missing">游戏目录不存在: %1$s</string>
+    <string name="webview_error_game_index_missing">游戏文件不完整，缺少主页文件</string>
+    <string name="webview_error_load_detail">错误 %1$d: %2$s</string>
+    <string name="webview_error_load_unknown">未知错误</string>
+    <string name="webview_error_load">加载错误: %1$s</string>
+    <string name="webview_error_game_url_missing">无法获取游戏URL</string>
+    <string name="webview_error_server_start_failed">启动游戏服务失败: %1$s</string>
+    <string name="webview_score_label">当前得分:%1$d</string>
+    <string name="webview_level_label">关卡: %1$s</string>
+    <string name="webview_reward_summary">+%1$d EXP  /  +%2$d 金币</string>
+    <string name="webview_reward_exp">+%1$d EXP</string>
+    <string name="webview_reward_coins">+%1$d 金币</string>
+    <string name="webview_overlay_close">关闭</string>
+    <string name="webview_goal_title_emoji">🎯</string>
+    <string name="webview_goal_title">目标达成！</string>
+    <string name="webview_goal_task_placeholder">挑战任务</string>
+    <string name="webview_goal_reward_emoji">🏅 </string>
+    <string name="webview_goal_reward_placeholder">奖励预览</string>
+    <string name="webview_goal_complete_action">完 成</string>
 </resources>

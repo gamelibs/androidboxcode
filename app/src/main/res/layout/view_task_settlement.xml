@@ -1,0 +1,165 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  任务结算页：从"目标达成"层点击"完成"后切换到此层，
+  展示任务信息和奖励详情，点击"确认领取"后关闭并回到主界面。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#CC000000">
+
+    <!-- 结算卡片 -->
+    <LinearLayout
+        android:layout_width="320dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_overlay_card"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- 标题 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="🎊 任务结算"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <!-- 分割线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginBottom="16dp"
+            android:layout_marginTop="12dp"
+            android:background="#44FFFFFF" />
+
+        <!-- 任务名称 -->
+        <TextView
+            android:id="@+id/settlement_task_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="挑战完成"
+            android:textColor="#E0E0E0"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <!-- 任务描述 -->
+        <TextView
+            android:id="@+id/settlement_task_desc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:gravity="center"
+            android:text=""
+            android:textColor="#AAAAAA"
+            android:textSize="13sp" />
+
+        <!-- 奖励卡 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:background="#33FFFFFF"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:padding="14dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="本次奖励"
+                android:textColor="#CCCCCC"
+                android:textSize="12sp" />
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:gravity="center"
+                android:orientation="horizontal">
+
+                <!-- EXP -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="🏅"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:id="@+id/settlement_reward_exp"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="+40 EXP"
+                        android:textColor="#FFD700"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+
+                <View
+                    android:layout_width="1dp"
+                    android:layout_height="40dp"
+                    android:layout_marginHorizontal="16dp"
+                    android:background="#44FFFFFF" />
+
+                <!-- 金币 -->
+                <LinearLayout
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:gravity="center"
+                    android:orientation="vertical"
+                    android:padding="8dp">
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="💰"
+                        android:textSize="22sp" />
+
+                    <TextView
+                        android:id="@+id/settlement_reward_coins"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="+12 金币"
+                        android:textColor="#FFD700"
+                        android:textSize="14sp"
+                        android:textStyle="bold" />
+                </LinearLayout>
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 提示文字 -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:gravity="center"
+            android:text="返回后自动更新历练进度"
+            android:textColor="#888888"
+            android:textSize="12sp" />
+
+        <!-- 确认领取按钮 -->
+        <Button
+            android:id="@+id/btn_confirm_claim"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_green_game_button"
+            android:text="确认领取"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>
+

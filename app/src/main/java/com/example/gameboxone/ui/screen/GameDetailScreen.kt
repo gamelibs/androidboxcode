@@ -1,598 +1,603 @@
 package com.example.gameboxone.ui.screen
 
 import com.example.gameboxone.AppLog as Log
+import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.* // 引入 height 等扩展
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathEffect
-import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.example.gameboxone.data.model.AdventureTaskStatus
+import com.example.gameboxone.data.model.AdventureTaskUiModel
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.viewmodel.GameDetailViewModel
-import androidx.compose.foundation.Canvas
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.window.DialogProperties
-import androidx.compose.ui.draw.clip
 
-import kotlin.math.sin
+// ── Warm palette (matches HomeScreen) ────────────────────────────────────────
+private val OrangeGradient = Brush.verticalGradient(
+    colors = listOf(Color(0xFFFFD180), Color(0xFFFF9100))
+)
+private val WarmBg = Brush.verticalGradient(
+    colors = listOf(Color(0xFFFFF8E1), Color(0xFFFFF3E0), Color(0xFFFFFFFF))
+)
+private val CardBg      = Color(0xFFFFFDE7)
+private val OrangePrimary = Color(0xFFFFA726)
+private val OrangeDeep   = Color(0xFFFF9100)
+private val TextDark     = Color(0xFF4E342E)
+private val TextMid      = Color(0xFF6D4C41)
+private val TextLight    = Color(0xFF8D6E63)
+// ─────────────────────────────────────────────────────────────────────────────
+
 @Composable
 fun GameDetailScreen(
     viewModel: GameDetailViewModel = hiltViewModel()
 ) {
     val state by viewModel.state.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val error by viewModel.error.collectAsState()
-
-    // 从 ViewModel 中获取已验证的 gameId
     val gameId = viewModel.gameId
 
-    // 初始化加载
-    LaunchedEffect(gameId) {
-        viewModel.loadGameDetails(gameId)
-    }
+    LaunchedEffect(gameId) { viewModel.loadGameDetails(gameId) }
 
-    LaunchedEffect(error) {
-        error?.let { errorMessage ->
-            // 只记录错误，实际显示由全局消息系统处理
-            Log.e("GameDetailScreen", "错误: $errorMessage")
-            
-            // 10秒后自动清除错误状态
-            kotlinx.coroutines.delay(10000)
-            viewModel.clearError()
-        }
-    }
-
-    Box(modifier = Modifier.fillMaxSize()) {
-        Scaffold(
-            topBar = {
-                // Custom Top Bar（去除 statusBarsPadding，避免状态栏显隐导致内容位移）
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 8.dp)
-                ) {
-                    IconButton(
-                        onClick = { viewModel.onBackPressed() },
-                        modifier = Modifier.align(Alignment.CenterStart)
-                    ) {
-                        Icon(
-                            imageVector = androidx.compose.material.icons.Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back",
-                            tint = Color(0xFFFF9800) // Orange tint
-                        )
-                    }
-                    
-                    Text(
-                        text = "探索者",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFFFF9800),
-                        modifier = Modifier.align(Alignment.Center)
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(WarmBg)
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // ── Top bar ───────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .statusBarsPadding()
+                    .padding(horizontal = 4.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = { viewModel.onBackPressed() }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "返回",
+                        tint = OrangeDeep
                     )
                 }
-            },
-            containerColor = Color.Transparent // Make transparent to show background
-        ) { paddingValues ->
-            // 主要内容
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFFFFF8E1), // Light Yellow/Orange
-                                Color(0xFFFFFFFF)  // White
+                Text(
+                    text = state.game?.name ?: "游戏详情",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = OrangeDeep,
+                    modifier = Modifier.weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            // ── Scrollable body ───────────────────────────────────────────
+            when {
+                state.isLoading && state.game == null -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            CircularProgressIndicator(color = OrangePrimary)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = state.loadingMessage ?: "加载中…",
+                                color = TextMid,
+                                style = MaterialTheme.typography.bodyMedium
                             )
-                        )
+                        }
+                    }
+                }
+                state.game != null -> {
+                    GameBody(
+                        state = state,
+                        onLaunch = { viewModel.launchGame() },
+                        onDownloadConfirm = { viewModel.startDownload() },
+                        onDownloadDismiss = { viewModel.dismissDownloadDialog() }
                     )
-            ) {
-                // Add Adventure Path Background
-                DetailPathBackground()
-                
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(paddingValues)
-                ) {
-                    when {
-                        isLoading -> {
-                            Column(
-                                modifier = Modifier.align(Alignment.Center),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                CircularProgressIndicator()
-                                
-                                // 显示加载消息（如果有）
-                                state.loadingMessage?.let { message ->
-                                    Text(
-                                        text = message,
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
+                }
+                else -> {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Icon(
+                                Icons.Default.Warning,
+                                contentDescription = null,
+                                tint = OrangePrimary,
+                                modifier = Modifier.size(48.dp)
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text("未找到游戏信息", color = TextMid, fontWeight = FontWeight.Bold)
+                            state.error?.let {
+                                Text(it, color = TextLight, style = MaterialTheme.typography.bodySmall)
                             }
                         }
-                        state.game != null -> {
-                            GameContent(
-                                game = state.game!!,
-                                onLaunchGame = { viewModel.launchGame() }
-                            )
-                        }
-                        else -> {
-                            EmptyContent()
-                        }
                     }
                 }
             }
         }
-
-        // 内嵌覆盖层形式的“下载游戏”弹窗，不再使用系统级 Dialog，避免触发布局伸缩
-        if (state.showDownloadDialog) {
-            state.downloadInfo?.let { info ->
-                DownloadOverlay(
-                    gameName = info.gameName,
-                    onConfirm = { viewModel.startDownload() },
-                    onDismiss = { viewModel.dismissDownloadDialog() }
-                )
-            }
-        }
-
-        // 内嵌覆盖层形式的下载进度弹窗
-        if (state.isDownloading) {
-            DownloadProgressOverlay(progress = state.downloadProgress)
-        }
     }
 }
 
+// ── Game body (scrollable) ────────────────────────────────────────────────────
 @Composable
-private fun DetailPathBackground() {
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        val path = Path().apply {
-            // Simple S-curve path
-            moveTo(100f, size.height - 300f)
-            cubicTo(
-                100f, size.height - 500f,
-                size.width - 100f, size.height - 400f,
-                size.width - 150f, size.height / 2
-            )
-            cubicTo(
-                size.width - 200f, size.height / 2 - 200f,
-                200f, 300f,
-                size.width / 2, 200f
-            )
-        }
-
-        drawPath(
-            path = path,
-            color = Color.LightGray.copy(alpha = 0.5f),
-            style = Stroke(
-                width = 40f,
-                pathEffect = PathEffect.dashPathEffect(floatArrayOf(40f, 40f), 0f)
-            )
-        )
-    }
-}
-
-@Composable
-private fun GameContent(
-    game: Custom.HotGameData,
-    onLaunchGame: () -> Unit
+private fun GameBody(
+    state: com.example.gameboxone.data.state.GameDetailState,
+    onLaunch: () -> Unit,
+    onDownloadConfirm: () -> Unit,
+    onDownloadDismiss: () -> Unit
 ) {
+    val game = state.game ?: return
+    val scroll = rememberScrollState()
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .padding(16.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .verticalScroll(scroll)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // 游戏标题
-        Text(
-            text = game.name,
-            style = MaterialTheme.typography.headlineMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.Black
-        )
-        
-        Spacer(modifier = Modifier.height(8.dp))
-        
-        // 游戏描述
-        Text(
-            text = game.description,
-            style = MaterialTheme.typography.bodyMedium,
-            color = Color.Gray,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(horizontal = 16.dp)
-        )
+        Spacer(modifier = Modifier.height(4.dp))
 
-        // 任务路径可视化
-        val points = game.taskPoints ?: emptyList()
-        if (points.isNotEmpty()) {
-            Spacer(modifier = Modifier.height(24.dp))
-            Box(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                 TaskPathVisualization(points = points)
+        // ── 1. Game info card ─────────────────────────────────────────────
+        GameInfoCard(game = game)
+
+        // ── 2. Adventure task card ────────────────────────────────────────
+        state.adventureTask?.let { task ->
+            TaskChallengeCard(task = task)
+        } ?: run {
+            // Minimal info if no task found
+            val desc = game.taskDesc
+            if (!desc.isNullOrBlank()) {
+                SimpleTaskHint(desc = desc)
             }
-            // Add spacer to prevent overlap with button
-            Spacer(modifier = Modifier.height(32.dp))
-        } else {
-            Spacer(modifier = Modifier.weight(1f))
         }
 
-        // 开始冒险按钮
-        StartGameButton(
-            text = "开始冒险",
-            onClick = onLaunchGame
+        // ── 3. Download/update status + action ───────────────────────────
+        GameActionSection(
+            game = game,
+            state = state,
+            onLaunch = onLaunch,
+            onDownloadConfirm = onDownloadConfirm,
+            onDownloadDismiss = onDownloadDismiss
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
 
+// ── Game info card ────────────────────────────────────────────────────────────
 @Composable
-private fun TaskPathVisualization(points: List<Int>) {
-    val density = LocalDensity.current
-
-    BoxWithConstraints(
-        modifier = Modifier
-            .fillMaxWidth()
-            .fillMaxHeight()
-            .padding(horizontal = 32.dp)
+private fun GameInfoCard(game: Custom.HotGameData) {
+    ElevatedCard(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = CardBg),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        val boxWidth = maxWidth
-        val boxHeight = maxHeight
-        val canvasWidthPx = with(density) { boxWidth.toPx() }
-        val canvasHeightPx = with(density) { boxHeight.toPx() }
-
-        val nodeCount = points.size
-
-        // 计算节点位置
-        val nodes = remember(points, canvasWidthPx, canvasHeightPx) {
-            points.mapIndexed { index, score ->
-                val progress = index.toFloat() / (nodeCount - 1).coerceAtLeast(1)
-                // Adjust Y range to keep nodes away from bottom edge (button area)
-                // Bottom node (progress=0) will be at canvasHeightPx - 120f
-                // Top node (progress=1) will be at 50f
-                val y = canvasHeightPx - (progress * (canvasHeightPx - 170f)) - 120f
-                val xOffset = (canvasWidthPx / 3) * sin(progress * Math.PI * 1.5).toFloat()
-                val x = (canvasWidthPx / 2) + xOffset
-                Triple(x, y, score)
-            }
-        }
-
-        // 绘制虚线路径
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val path = Path()
-            if (nodes.isNotEmpty()) {
-                path.moveTo(nodes[0].first, nodes[0].second)
-                for (i in 0 until nodes.size - 1) {
-                    val p1 = nodes[i]
-                    val p2 = nodes[i + 1]
-
-                    val cx1 = p1.first
-                    val cy1 = (p1.second + p2.second) / 2
-                    val cx2 = p2.first
-                    val cy2 = (p1.second + p2.second) / 2
-
-                    path.cubicTo(cx1, cy1, cx2, cy2, p2.first, p2.second)
-                }
-            }
-
-            drawPath(
-                path = path,
-                color = Color.LightGray,
-                style = Stroke(
-                    width = 10f,
-                    pathEffect = PathEffect.dashPathEffect(floatArrayOf(20f, 20f), 0f)
+        Row(
+            modifier = Modifier.padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Icon
+            if (game.iconUrl.isNotBlank()) {
+                AsyncImage(
+                    model = game.iconUrl,
+                    contentDescription = game.name,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier
+                        .size(76.dp)
+                        .clip(RoundedCornerShape(16.dp))
                 )
-            )
-        }
-
-        // 绘制节点
-        nodes.forEachIndexed { index, (x, y, score) ->
-            val xDp = with(density) { x.toDp() }
-            val yDp = with(density) { y.toDp() }
-
-            Box(
-                modifier = Modifier
-                    .offset(x = xDp - 40.dp, y = yDp - 40.dp) // Center the larger node (80.dp / 2)
-                    .size(80.dp)
-            ) {
-                TaskNode(index = index + 1, score = score, isCompleted = index == 0)
-            }
-        }
-    }
-}
-
-@Composable
-fun TaskNode(index: Int, score: Int, isCompleted: Boolean) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        // 节点圆圈
-        androidx.compose.material3.Surface(
-            shape = CircleShape,
-            color = if (isCompleted) Color(0xFF4CAF50) else Color(0xFFF5F5F5),
-            tonalElevation = 6.dp,
-            shadowElevation = 6.dp,
-            border = androidx.compose.foundation.BorderStroke(
-                width = 5.dp,
-                color = if (isCompleted) Color.White else Color(0xFFE0E0E0)
-            ),
-            modifier = Modifier.size(64.dp)
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                if (isCompleted) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Completed",
-                        tint = Color.White,
-                        modifier = Modifier.size(32.dp)
-                    )
-                } else {
-                    Text(
-                        text = "$index",
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.Gray
-                    )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(76.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(OrangePrimary.copy(alpha = 0.2f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(Icons.Default.SportsEsports, null, tint = OrangePrimary, modifier = Modifier.size(36.dp))
                 }
             }
-        }
 
-        // 分数标签
-        androidx.compose.material3.Surface(
-            shape = RoundedCornerShape(16.dp),
-            color = Color(0xFFFFC107),
-            tonalElevation = 4.dp,
-            shadowElevation = 4.dp,
-            border = androidx.compose.foundation.BorderStroke(1.dp, Color.White),
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .offset(y = 16.dp)
-        ) {
-            Text(
-                text = "$score",
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold,
-                color = Color.Black,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp)
-            )
-        }
-    }
-}
+            Spacer(modifier = Modifier.width(14.dp))
 
-@Composable
-private fun StartGameButton(
-    text: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true
-) {
-    val shape = RoundedCornerShape(28.dp)
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(56.dp)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFFFFD180), // Light Orange
-                        Color(0xFFFF9100)  // Deep Orange
-                    )
-                ),
-                shape = shape
-            )
-            .clickable(enabled = enabled, onClick = onClick),
-        contentAlignment = Alignment.Center
-    ) {
-        Text(
-            text = text,
-            color = Color.White,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold
-        )
-    }
-}
-
-/**
- * 空内容显示组件
- * 当没有游戏数据时显示的界面
- */
-@Composable
-private fun EmptyContent(
-    icon: ImageVector = Icons.Default.Warning,
-    title: String = "未找到游戏信息",
-    message: String = "请检查游戏ID是否正确"
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .padding(16.dp),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = "警告",
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.error
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleMedium,
-            color = MaterialTheme.colorScheme.onSurface
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = message,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-fun DownloadDialog(
-    gameName: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    DownloadOverlay(
-        gameName = gameName,
-        onConfirm = onConfirm,
-        onDismiss = onDismiss
-    )
-}
-
-@Composable
-private fun DownloadOverlay(
-    gameName: String,
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f))
-            .clickable(onClick = onDismiss),
-        contentAlignment = Alignment.Center
-    ) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFFFFF8E1)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            modifier = Modifier
-                .padding(horizontal = 32.dp)
-        ) {
-            Column(
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)
-            ) {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "下载游戏",
+                    text = game.name,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold,
-                    color = Color(0xFF5D4037)
+                    color = TextDark,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "游戏 $gameName 需要下载才能运行，是否立即下载？",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF6D4C41)
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    TextButton(onClick = onDismiss) {
-                        Text(
-                            text = "取消",
-                            color = Color(0xFFFFA726)
+                Spacer(modifier = Modifier.height(4.dp))
+                // Rating stars
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    repeat(5) { i ->
+                        Icon(
+                            if (i < game.rating) Icons.Default.Star else Icons.Default.StarBorder,
+                            null,
+                            tint = OrangePrimary,
+                            modifier = Modifier.size(16.dp)
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    Button(
-                        onClick = onConfirm,
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = Color(0xFFFFA726),
-                            contentColor = Color.White
-                        ),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Text("下载")
+                    if (game.rating > 0) {
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            "${game.rating}.0",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = TextLight
+                        )
                     }
                 }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = game.description.ifBlank { "精彩游戏等你来挑战" },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMid,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+    }
+}
+
+// ── Adventure task card ───────────────────────────────────────────────────────
+@Composable
+private fun TaskChallengeCard(task: AdventureTaskUiModel) {
+    val statusColor = when (task.status) {
+        AdventureTaskStatus.ACHIEVED  -> Color(0xFF4CAF50)
+        AdventureTaskStatus.CLAIMED,
+        AdventureTaskStatus.COMPLETED -> Color(0xFF9E9E9E)
+        AdventureTaskStatus.IN_PROGRESS -> OrangePrimary
+        else -> Color(0xFF78909C)
+    }
+    val statusIcon = when (task.status) {
+        AdventureTaskStatus.ACHIEVED  -> Icons.Default.CheckCircle
+        AdventureTaskStatus.CLAIMED,
+        AdventureTaskStatus.COMPLETED -> Icons.Default.CheckCircle
+        AdventureTaskStatus.IN_PROGRESS -> Icons.Default.PlayCircle
+        else -> Icons.Default.RadioButtonUnchecked
+    }
+
+    ElevatedCard(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = CardBg),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 3.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            // Header row
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                    Icons.Default.EmojiEvents,
+                    null,
+                    tint = OrangePrimary,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(6.dp))
+                Text(
+                    "当前历练挑战",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = OrangeDeep,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.weight(1f)
+                )
+                // Status badge
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = statusColor.copy(alpha = 0.15f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(statusIcon, null, tint = statusColor, modifier = Modifier.size(12.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(task.statusLabel, color = statusColor, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Task title
+            Text(
+                task.taskTitle,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = TextDark
+            )
+            if (task.taskDescription.isNotBlank()) {
+                Text(
+                    task.taskDescription,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = TextMid,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 10.dp), color = Color(0xFFFFE0B2))
+
+            // Target & progress row
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("挑战目标", style = MaterialTheme.typography.labelSmall, color = TextLight)
+                    Text(task.targetText, style = MaterialTheme.typography.bodyMedium, color = TextDark, fontWeight = FontWeight.Medium)
+                }
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("当前进度", style = MaterialTheme.typography.labelSmall, color = TextLight)
+                    Text(task.progressText, style = MaterialTheme.typography.bodyMedium, color = OrangeDeep, fontWeight = FontWeight.Medium)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Reward row
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFFFF3E0))
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("🏆 完成奖励", style = MaterialTheme.typography.labelSmall, color = TextMid, modifier = Modifier.weight(1f))
+                Text(task.rewardText, style = MaterialTheme.typography.bodySmall, color = OrangeDeep, fontWeight = FontWeight.Bold)
             }
         }
     }
 }
 
 @Composable
-private fun DownloadProgressOverlay(
-    progress: Float
-) {
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(Color.Black.copy(alpha = 0.3f)),
-        contentAlignment = Alignment.Center
+private fun SimpleTaskHint(desc: String) {
+    ElevatedCard(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = CardBg),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Card(
-            shape = RoundedCornerShape(24.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = Color(0xFFFFF8E1)
-            ),
-            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-            modifier = Modifier
-                .padding(horizontal = 32.dp)
+        Row(
+            modifier = Modifier.padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Column(
-                modifier = Modifier
-                    .padding(horizontal = 20.dp, vertical = 16.dp)
+            Icon(Icons.Default.Info, null, tint = OrangePrimary, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(desc, style = MaterialTheme.typography.bodySmall, color = TextMid)
+        }
+    }
+}
+
+// ── Action section (download / update / play) ─────────────────────────────────
+@Composable
+private fun GameActionSection(
+    game: Custom.HotGameData,
+    state: com.example.gameboxone.data.state.GameDetailState,
+    onLaunch: () -> Unit,
+    onDownloadConfirm: () -> Unit,
+    onDownloadDismiss: () -> Unit
+) {
+    val isUpdate = game.isLocal && state.hasUpdate
+    val needsDownload = !game.isLocal
+
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+
+        // ── Status chip：仅在有新版本或正在下载时显示 ──────────────────────
+        when {
+            state.isDownloading -> {
+                // 下载中进度卡（不另显示 chip）
+            }
+            isUpdate -> {
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = OrangePrimary.copy(alpha = 0.12f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.AutoAwesome, null, tint = OrangePrimary,
+                            modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("新宝藏降世", color = OrangePrimary,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            game.isLocal && !state.hasUpdate -> {
+                // 已下载且无更新：仅显示本地标签，不展示任何下载入口
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = Color(0xFF4CAF50).copy(alpha = 0.10f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.CheckCircle, null, tint = Color(0xFF4CAF50),
+                            modifier = Modifier.size(14.dp))
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text("已驻守本地", color = Color(0xFF4CAF50),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+
+        // ── 下载 / 更新进度条（诗意提示）─────────────────────────────────
+        if (state.isDownloading) {
+            ElevatedCard(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.elevatedCardColors(containerColor = CardBg),
+                elevation = CardDefaults.elevatedCardElevation(defaultElevation = 2.dp)
             ) {
-                Text(
-                    text = "下载中",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF5D4037)
-                )
+                Column(modifier = Modifier.padding(14.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            if (isUpdate) "✨ 新宝藏正在降临…" else "🗺 寻觅宝藏中，请稍候…",
+                            style = MaterialTheme.typography.bodySmall, color = TextMid
+                        )
+                        Text(
+                            "${(state.downloadProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = OrangeDeep, fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                    LinearProgressIndicator(
+                        progress = { state.downloadProgress },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp)),
+                        color = OrangeDeep,
+                        trackColor = Color(0xFFFFCC80)
+                    )
+                    Text(
+                        if (isUpdate) "新版本${game.name}即将就绪，请耐心等待"
+                        else "正在召唤${game.name}，前路漫漫请稍候",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = TextLight,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
+                }
+            }
+        }
 
-                Spacer(modifier = Modifier.height(12.dp))
+        // ── 确认下载卡：仅在未下载 或 有更新 时才显示 ────────────────────
+        if (state.showDownloadDialog && state.downloadInfo != null &&
+            (needsDownload || isUpdate)) {
+            DownloadConfirmCard(
+                gameName = state.downloadInfo.gameName,
+                isUpdate = isUpdate,
+                onConfirm = onDownloadConfirm,
+                onDismiss = onDownloadDismiss
+            )
+        }
 
-                LinearProgressIndicator(
-                    progress = progress,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(6.dp)
-                        .clip(RoundedCornerShape(3.dp)),
-                    color = Color(0xFFFFA726),
-                    trackColor = Color(0xFFFFCC80)
-                )
+        // ── 主操作按钮 ────────────────────────────────────────────────────
+        if (!state.isDownloading) {
+            val (btnText, btnIcon) = when {
+                needsDownload -> "踏上征程" to Icons.Default.Explore
+                isUpdate      -> "获取新宝藏" to Icons.Default.AutoAwesome
+                else          -> "开始挑战" to Icons.Default.PlayArrow
+            }
 
-                Spacer(modifier = Modifier.height(8.dp))
-
-                Text(
-                    text = "下载进度: ${(progress * 100).toInt()}%",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = Color(0xFF6D4C41)
-                )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(56.dp)
+                    .clip(RoundedCornerShape(28.dp))
+                    .background(OrangeGradient)
+                    .clickable(enabled = !state.showDownloadDialog, onClick = onLaunch),
+                contentAlignment = Alignment.Center
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Icon(btnIcon, null, tint = Color.White, modifier = Modifier.size(20.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(btnText, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 17.sp)
+                }
             }
         }
     }
+}
+
+// ── Download / Update confirm card ────────────────────────────────────────────
+@Composable
+private fun DownloadConfirmCard(
+    gameName: String,
+    isUpdate: Boolean = false,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    ElevatedCard(
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.elevatedCardColors(containerColor = CardBg),
+        elevation = CardDefaults.elevatedCardElevation(defaultElevation = 4.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .animateContentSize()
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    if (isUpdate) Icons.Default.AutoAwesome else Icons.Default.Explore,
+                    null, tint = OrangePrimary, modifier = Modifier.size(22.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    if (isUpdate) "有新宝藏出世" else "踏上探索之旅",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold, color = TextDark
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                if (isUpdate)
+                    "「$gameName」已有新版本降临，承载着更多精彩，获取后方可尽享。"
+                else
+                    "「$gameName」尚在远方等候，寻觅归来方可展开对决，是否启程？",
+                style = MaterialTheme.typography.bodySmall,
+                color = TextMid,
+                lineHeight = 20.sp
+            )
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onDismiss) {
+                    Text("稍后再说", color = TextLight)
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Button(
+                    onClick = onConfirm,
+                    colors = ButtonDefaults.buttonColors(containerColor = OrangePrimary),
+                    shape = RoundedCornerShape(20.dp)
+                ) {
+                    Icon(
+                        if (isUpdate) Icons.Default.AutoAwesome else Icons.Default.Explore,
+                        null, modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(if (isUpdate) "立即获取" else "即刻启程")
+                }
+            }
+        }
+    }
+}
+
+// ── Legacy compat (kept for any remaining call sites) ─────────────────────────
+@Composable
+fun DownloadDialog(gameName: String, onConfirm: () -> Unit, onDismiss: () -> Unit) {
+    DownloadConfirmCard(gameName = gameName, isUpdate = false, onConfirm = onConfirm, onDismiss = onDismiss)
 }

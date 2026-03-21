@@ -6,7 +6,7 @@ import org.json.JSONObject
 import com.example.gameboxone.callback.AndroidEventCallBack
 import com.example.gameboxone.callback.AndroidEventCallBackHolder
 import java.lang.ref.WeakReference
-import java.util.concurrent.atomic.AtomicLong
+import java.util.Locale
 
 /**
  * Bridge to emit ad lifecycle events from native to the game's iframeSdk.
@@ -14,15 +14,11 @@ import java.util.concurrent.atomic.AtomicLong
  */
 object AdGameEventBridge {
     private const val TAG = "AdGameEventBridge"
-    private const val BRIDGE_TAG = "GAME_EVENTS_BRIDGE"
     private var callbackRef: WeakReference<AndroidEventCallBack>? = null
     // track timestamp of last reported ad_error to suppress immediate duplicate callbacks
     @Volatile private var lastAdErrorAt: Long = 0L
     // Track last error time by message_id to avoid duplicates per request
     private val lastErrorByMessageId: MutableMap<String, Long> = java.util.concurrent.ConcurrentHashMap()
-    // message id generator for outgoing bridge messages
-    private val messageIdCounter = AtomicLong(0)
-
     fun setCallback(cb: AndroidEventCallBack?) {
         callbackRef = if (cb != null) WeakReference(cb) else null
         Log.d(TAG, "Callback set: ${cb != null}")
@@ -47,7 +43,7 @@ object AdGameEventBridge {
                     when (value) {
                         null -> payloadBuilder.append("null")
                         is Boolean, is Number -> payloadBuilder.append(value.toString())
-                        is org.json.JSONObject -> payloadBuilder.append(value.toString())
+                        is JSONObject -> payloadBuilder.append(value.toString())
                         else -> payloadBuilder.append('"').append(value.toString()).append('"')
                     }
                     payloadBuilder.append('}')
@@ -71,7 +67,7 @@ object AdGameEventBridge {
         // start of a new ad session: clear any previous error marker timestamp
         lastAdErrorAt = 0L
 
-        val normalized = when (kind.toLowerCase()) {
+        val normalized = when (kind.lowercase(Locale.ROOT)) {
             "interstitial", "interstitialad", "interstitial_ad", "inter" -> "interstitial"
             "reward", "rewarded", "rewardedad", "rewarded_ad" -> "reward"
             else -> kind
@@ -97,7 +93,7 @@ object AdGameEventBridge {
      */
     fun adViewed(kind: String, extra: Map<String, Any?>? = null) {
         try {
-            val normalized = when (kind.toLowerCase()) {
+            val normalized = when (kind.lowercase(Locale.ROOT)) {
                 "interstitial", "interstitialad", "interstitial_ad", "inter" -> "interstitial"
                 "reward", "rewarded", "rewardedad", "rewarded_ad" -> "reward"
                 else -> kind
@@ -114,7 +110,7 @@ object AdGameEventBridge {
                 for ((k, v) in extra) {
                     try {
                         when (v) {
-                            null -> obj.put(k, org.json.JSONObject.NULL)
+                            null -> obj.put(k, JSONObject.NULL)
                             is Number, is Boolean, is String -> obj.put(k, v)
                             else -> obj.put(k, v.toString())
                         }
@@ -162,7 +158,7 @@ object AdGameEventBridge {
                     } else {
                         send("ad_error" to reason)
                     }
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     // fallback to primitive
                     send("ad_error" to reason)
                 }

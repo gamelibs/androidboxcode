@@ -15,6 +15,11 @@ sealed class NavigationEvent {
     data class NavigateToGameDetail(val gameId: String) : NavigationEvent()
 
     /**
+     * 导航到历练任务详情页
+     */
+    data class NavigateToAdventureTaskDetail(val taskId: String) : NavigationEvent()
+
+    /**
      * 返回上一页
      */
     object PopBackStack : NavigationEvent()

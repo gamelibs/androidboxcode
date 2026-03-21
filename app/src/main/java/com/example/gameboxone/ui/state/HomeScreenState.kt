@@ -1,6 +1,7 @@
 package com.example.gameboxone.ui.state
 
 
+import com.example.gameboxone.data.model.AdventureHomeUiState
 import com.example.gameboxone.data.model.GameConfigItem
 
 data class HomeScreenState(
@@ -8,6 +9,7 @@ data class HomeScreenState(
     val isLoading: Boolean = false,
     val isSyncing: Boolean = false,
     val games: List<GameConfigItem> = emptyList(),
+    val adventureHome: AdventureHomeUiState = AdventureHomeUiState(),
     val error: String? = null,
     val syncError: String? = null,
     val isRefreshing: Boolean = false,

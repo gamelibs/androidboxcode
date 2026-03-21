@@ -45,7 +45,7 @@ class UserManager @Inject constructor(
         private const val KEY_DEVICE_ID = "device_id"
 
         // 业务侧 groupId（当前为固定值；后续可从配置/渠道注入）
-        private const val DEFAULT_GROUP_ID = "1767001583696932"
+        private const val DEFAULT_GROUP_ID = "1774078205435984"
     }
 
     private val prefs = context.getSharedPreferences(PREF_NAME, Context.MODE_PRIVATE)

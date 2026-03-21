@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.event.GameEvent
+import com.example.gameboxone.event.TaskEvent
 
 import com.example.gameboxone.manager.SystemEvent
 import com.example.gameboxone.manager.ResourceEvent
@@ -79,6 +80,35 @@ class EventManager @Inject constructor(
     // 数据事件流
     private val _dataEvents = MutableSharedFlow<DataEvent>(replay = 5)
     val dataEvents: SharedFlow<DataEvent> = _dataEvents.asSharedFlow()
+
+    // 任务事件流（任务达成 / 奖励领取）
+    private val _taskEvents = MutableSharedFlow<TaskEvent>(
+        extraBufferCapacity = 8,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val taskEvents: SharedFlow<TaskEvent> = _taskEvents.asSharedFlow()
+
+    /** 发送任务事件（可在任意线程调用） */
+    fun emitTaskEventBlocking(event: TaskEvent) {
+        coroutineScope.launch {
+            try {
+                _taskEvents.emit(event)
+                Log.d(TAG, "任务事件已发送: $event")
+            } catch (e: Exception) {
+                Log.e(TAG, "任务事件发送失败", e)
+            }
+        }
+    }
+
+    /** 在挂起环境中发送任务事件 */
+    suspend fun emitTaskEvent(event: TaskEvent) {
+        try {
+            _taskEvents.emit(event)
+            Log.d(TAG, "任务事件已发送: $event")
+        } catch (e: Exception) {
+            Log.e(TAG, "任务事件发送失败", e)
+        }
+    }
     
     // 缓冲队列，存储尚未消费的事件
     private val eventBuffer: Queue<DataEvent> = LinkedList()

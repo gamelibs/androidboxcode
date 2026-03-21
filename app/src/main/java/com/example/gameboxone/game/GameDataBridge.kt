@@ -14,7 +14,6 @@ import com.example.gameboxone.callback.AndroidEventCallBack
 import org.json.JSONArray
 import kotlin.jvm.javaClass
 import kotlin.let
-import kotlin.random.Random
 import kotlin.ranges.until
 import kotlin.text.equals
 import kotlin.text.isBlank
@@ -28,7 +27,11 @@ import kotlin.text.lowercase
  */
 class GameDataBridge(
     private val uiModule: com.example.gameboxone.webview.GameInfoUIModule?,
-    private val eventCallBack: AndroidEventCallBack? = null
+    private val eventCallBack: AndroidEventCallBack? = null,
+    /** 任务事件处理器（Hilt 注入后由 WebViewActivity 传入） */
+    private val gameTaskHandler: com.example.gameboxone.manager.GameTaskEventHandler? = null,
+    /** 当前正在游玩的游戏 ID（来自 WebViewActivity.gameId） */
+    private val currentGameId: String? = null
 ) {
     
     companion object {
@@ -61,6 +64,8 @@ class GameDataBridge(
     private val mainHandler = Handler(Looper.getMainLooper())
     // Guard/handler for scheduling delayed app_ads_on probe response
     private var appAdsProbeScheduled = false
+    private var hasReportedGameStart = false
+    private var reportedPlaySeconds = 0
     
     /**
      * 简化的事件处理方法
@@ -119,6 +124,7 @@ class GameDataBridge(
             // 直接调用UI模块，不再通过Activity
             uiModule.updateGameStatus("true")
             uiModule.updateGameName(gameName)
+            notifyGameStartIfNeeded()
         }
     }
     
@@ -331,6 +337,7 @@ class GameDataBridge(
                 "game_start", "GAME_START" -> {
                     // 不处理传入数据，仅显示已进入游戏状态
                     uiModule?.updateGameStatus("true")
+                    notifyGameStartIfNeeded()
                 }
                 "level_start", "LEVEL_START" -> {
                     val levelName = json.optString("level_name", "关卡1")
@@ -374,6 +381,13 @@ class GameDataBridge(
                     } ?: "0"
 
                     uiModule?.updateScore(numericScore)
+
+                    // ── 任务进度驱动：分数事件 ──────────────────────────────────
+                    currentGameId?.takeIf { it.isNotBlank() }?.let { gameId ->
+                        numericScore.toIntOrNull()?.let { score ->
+                            if (score > 0) gameTaskHandler?.onGameScore(gameId, score)
+                        }
+                    }
                 }
                 "level_end", "LEVEL_END" -> {
                     // 优先支持 { "value": { ... } } 结构（来自 adsdklayer 中的 value 字段）
@@ -451,10 +465,72 @@ class GameDataBridge(
 
                     uiModule?.updateScore(score)
                     uiModule?.updateLevel(levelOnly)
+
+                    // ── 任务进度驱动：关卡结束事件 ────────────────────────────
+                    currentGameId?.takeIf { it.isNotBlank() }?.let { gameId ->
+                        // STAGE 任务：取关卡编号
+                        levelOnly.toIntOrNull()?.let { lvNum ->
+                            if (lvNum > 0) gameTaskHandler?.onLevelReached(gameId, lvNum)
+                        }
+                        // CLEAR/ELITE 任务：只有 success=true 才算通关
+                        if (success) gameTaskHandler?.onGameClear(gameId)
+                        // SCORE 任务：把关卡末尾分数也同步一次（补充 game_score 的快照）
+                        score.toIntOrNull()?.let { s ->
+                            if (s > 0) gameTaskHandler?.onGameScore(gameId, s)
+                        }
+                    }
                 }
                 "game_time", "GAME_TIME" -> {
                     val gameTime = json.optString("value", json.optString("game_time", "0"))
                     uiModule?.updateGameTime(gameTime)
+                    currentGameId?.takeIf { it.isNotBlank() }?.let { gameId ->
+                        val seconds = extractDurationSeconds(json)
+                        if (seconds > reportedPlaySeconds) {
+                            gameTaskHandler?.onGameTime(gameId, seconds - reportedPlaySeconds)
+                            reportedPlaySeconds = seconds
+                        }
+                    }
+                }
+                // ── 关卡编号事件（game_level）驱动 STAGE 任务 ─────────────────
+                "game_level", "GAME_LEVEL" -> {
+                    // SDK payload: { "type": "game_level", "value": { "level": N } }
+                    val lvNum = try {
+                        val v = json.opt("value")
+                        when (v) {
+                            is Number -> v.toInt()
+                            is JSONObject -> v.optInt("level", 0)
+                            is String -> v.toIntOrNull() ?: 0
+                            else -> json.optInt("level", 0)
+                        }
+                    } catch (_: Exception) { 0 }
+
+                    if (lvNum > 0) {
+                        uiModule?.updateLevel(lvNum.toString())
+                        currentGameId?.takeIf { it.isNotBlank() }?.let { gameId ->
+                            gameTaskHandler?.onLevelReached(gameId, lvNum)
+                        }
+                    }
+                }
+                // ── 游戏结束（game_over）做最终分数快照 ──────────────────────
+                "game_over", "GAME_OVER" -> {
+                    // 把 game_over 转发给 UI（显示 restart 面板，已由 handleAdEvent 处理）
+                    uiModule?.handleAdEvent("game_over", json.toString())
+
+                    // 若 game_over 事件携带最终分数，也同步给任务系统
+                    currentGameId?.takeIf { it.isNotBlank() }?.let { gameId ->
+                        try {
+                            val finalScore = run {
+                                val v = json.opt("value")
+                                when (v) {
+                                    is Number -> v.toInt()
+                                    is JSONObject -> v.optInt("score", 0)
+                                    is String -> v.toIntOrNull() ?: 0
+                                    else -> json.optInt("score", 0)
+                                }
+                            }
+                            if (finalScore > 0) gameTaskHandler?.onGameOver(gameId, finalScore)
+                        } catch (_: Exception) {}
+                    }
                 }
                 // 广告事件处理：检查 app_ads_on 状态并调用对应 AdManager 方法
                 "interstitial", "INTERSTITIAL" -> {
@@ -602,6 +678,69 @@ class GameDataBridge(
             
         } catch (e: Exception) {
             Log.e(TAG, "处理广告事件失败: $adType", e)
+        }
+    }
+
+    private fun notifyGameStartIfNeeded() {
+        if (hasReportedGameStart) return
+        val gameId = currentGameId?.takeIf { it.isNotBlank() } ?: return
+        hasReportedGameStart = true
+        reportedPlaySeconds = 0
+        gameTaskHandler?.onGameStart(gameId)
+    }
+
+    private fun extractDurationSeconds(json: JSONObject): Int {
+        val source: Any? = when {
+            json.has("value") -> json.opt("value")
+            json.has("game_time") -> json.opt("game_time")
+            json.has("duration") -> json.opt("duration")
+            else -> null
+        }
+        return parseDurationSeconds(source)
+    }
+
+    private fun parseDurationSeconds(value: Any?): Int {
+        return when (value) {
+            null -> 0
+            is Number -> {
+                val raw = value.toDouble()
+                if (raw > 10_000) (raw / 1000.0).toInt() else raw.toInt()
+            }
+            is JSONObject -> {
+                val seconds = value.optInt("seconds", Int.MIN_VALUE)
+                when {
+                    seconds != Int.MIN_VALUE -> seconds
+                    value.has("duration") -> parseDurationSeconds(value.opt("duration"))
+                    value.has("value") -> parseDurationSeconds(value.opt("value"))
+                    value.has("game_time") -> parseDurationSeconds(value.opt("game_time"))
+                    else -> 0
+                }
+            }
+            is String -> {
+                val trimmed = value.trim()
+                if (trimmed.isBlank()) {
+                    0
+                } else {
+                    runCatching { JSONObject(trimmed) }.getOrNull()?.let {
+                        return parseDurationSeconds(it)
+                    }
+                    trimmed.toIntOrNull()?.let { raw ->
+                        return if (raw > 10_000) raw / 1000 else raw
+                    }
+                    val parts = trimmed.split(":")
+                    if (parts.size in 2..3 && parts.all { it.toIntOrNull() != null }) {
+                        val nums = parts.map { it.toInt() }
+                        when (nums.size) {
+                            2 -> nums[0] * 60 + nums[1]
+                            3 -> nums[0] * 3600 + nums[1] * 60 + nums[2]
+                            else -> 0
+                        }
+                    } else {
+                        Regex("(\\d+)").find(trimmed)?.value?.toIntOrNull() ?: 0
+                    }
+                }
+            }
+            else -> 0
         }
     }
 

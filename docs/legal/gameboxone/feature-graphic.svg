@@ -1,0 +1,29 @@
+<svg width="1024" height="500" viewBox="0 0 1024 500" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1024" height="500" rx="48" fill="#FFF8EF"/>
+  <rect x="0" y="0" width="1024" height="500" rx="48" fill="url(#paint0_linear)" fill-opacity="0.12"/>
+  <path d="M-24 430C166 266 358 190 578 186C734 182 880 232 1068 352V544H-24V430Z" fill="#FF9800" fill-opacity="0.16"/>
+  <g transform="translate(82,92)">
+    <rect width="316" height="316" rx="80" fill="#2C1B12"/>
+    <path d="M-6 250C65 160 136 122 219 116C262 114 302 130 350 166V316H-6V250Z" fill="#FF8A00" fill-opacity="0.18"/>
+    <path d="M218 38L232 66L264 70L239 91L247 122L218 108L189 122L197 91L172 70L204 66L218 38Z" fill="#FFD166"/>
+    <path d="M76 122H242L222 150H96L76 122Z" fill="#FFB54D"/>
+    <path d="M88 150H230C237.732 150 244 156.268 244 164V236C244 247.046 235.046 256 224 256H94C82.9543 256 74 247.046 74 236V164C74 156.268 80.268 150 88 150Z" fill="#FF9100"/>
+    <path d="M76 150H242L225 173H93L76 150Z" fill="#FFC86B"/>
+    <path d="M145 174V220L190 197L145 174Z" fill="#FFF7ED"/>
+    <rect x="116" y="227" width="87" height="12" rx="6" fill="#FFF0D6" fill-opacity="0.65"/>
+  </g>
+  <g transform="translate(444,92)">
+    <text x="0" y="72" fill="#2D211B" font-size="72" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" font-weight="800">GameBoxOne</text>
+    <text x="0" y="142" fill="#8F5C2B" font-size="30" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" font-weight="600">成长驱动的小游戏冒险盒子</text>
+    <text x="0" y="216" fill="#5D483D" font-size="26" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif">首页挑战 · 历练升级 · WebView 游戏 · 本地任务闭环</text>
+    <rect x="0" y="266" width="218" height="56" rx="28" fill="#FF9800" fill-opacity="0.16"/>
+    <text x="28" y="302" fill="#A15F00" font-size="24" font-family="Segoe UI, PingFang SC, Microsoft YaHei, sans-serif" font-weight="700">Adventure Game Box</text>
+  </g>
+  <defs>
+    <linearGradient id="paint0_linear" x1="0" y1="0" x2="1024" y2="500" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF9800"/>
+      <stop offset="1" stop-color="#2C1B12"/>
+    </linearGradient>
+  </defs>
+</svg>
+

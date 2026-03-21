@@ -13,12 +13,15 @@ data class UserLevel(
 object UserLevelConfig {
     private val levels = listOf(
         UserLevel(1, "探索者", 0),
-        UserLevel(2, "小旅者", 100),
-        UserLevel(3, "冒险者", 300),
-        UserLevel(4, "勇敢者", 600),
-        UserLevel(5, "先行者", 1000),
-        UserLevel(6, "探险大师", 1600),
-        UserLevel(7, "终极探险家", 2300)
+        UserLevel(2, "行旅者", 100),
+        UserLevel(3, "闯关者", 300),
+        UserLevel(4, "御风者", 600),
+        UserLevel(5, "破境者", 1000),
+        UserLevel(6, "星辉者", 1600),
+        UserLevel(7, "统御者", 2300),
+        UserLevel(8, "归真者", 3100),
+        UserLevel(9, "问道者", 4000),
+        UserLevel(10, "合道者", 5000)
     )
 
     /**

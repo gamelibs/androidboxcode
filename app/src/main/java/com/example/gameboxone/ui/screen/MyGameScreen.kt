@@ -37,12 +37,19 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.draw.clip
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.gameboxone.data.model.AdventureHomeUiState
+import com.example.gameboxone.data.model.AdventureTaskStatus
+import com.example.gameboxone.data.model.AdventureTaskUiModel
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.data.model.UserProfile
 import com.example.gameboxone.data.model.UserLevelConfig
 import com.example.gameboxone.R
 import com.example.gameboxone.data.viewmodel.MyGameViewModel
 import com.example.gameboxone.data.viewmodel.UserProfileViewModel
+import com.example.gameboxone.manager.IconCacheManager
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.File
 import com.example.gameboxone.data.viewmodel.HomeViewModel
 import kotlinx.coroutines.launch
 
@@ -54,117 +61,106 @@ fun MyGameScreen(
     viewModel: MyGameViewModel = hiltViewModel(),
     userProfileViewModel: UserProfileViewModel = hiltViewModel()
 ) {
-    val homeViewModel: HomeViewModel = hiltViewModel()
-
     val uiState by viewModel.uiState.collectAsState()
     val profile by userProfileViewModel.profile.collectAsState()
-
-    // SDK version collected from ViewModel StateFlow so UI reflects updates
-    val sdkVersion by viewModel.sdkVersion.collectAsState()
+    val homeViewModel: HomeViewModel = hiltViewModel()
+    val homeState by homeViewModel.uiState.collectAsState()
+    val adventureHome = homeState.adventureHome
 
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    
-    // Delete Confirmation Dialog State
+
+    // 分类 Tab
+    var selectedTab by remember { mutableIntStateOf(0) }
+    val tabs = listOf("已安装", "全部")
+
+    // Delete dialog state
     var showDeleteDialog by remember { mutableStateOf(false) }
     var gameToDelete by remember { mutableStateOf<Custom.MyGameData?>(null) }
 
-    // 初次进入页面加载数据 - 使用LaunchedEffect(key1 = true)确保只执行一次
     LaunchedEffect(key1 = true) {
-        Log.d(TAG, "MyGameScreen LaunchedEffect: 初始化加载数据")
-        Log.d(TAG, "MyGameScreen ViewModel instances: MyGameViewModel=${viewModel.hashCode()}, HomeViewModel=${homeViewModel.hashCode()}")
+        Log.d(TAG, "MyGameScreen 初始化加载数据")
         viewModel.loadGameData()
     }
 
-    // 显示错误信息
     LaunchedEffect(uiState.error) {
-        uiState.error?.let {
-            scope.launch {
-                snackbarHostState.showSnackbar(message = it)
-            }
-        }
+        uiState.error?.let { scope.launch { snackbarHostState.showSnackbar(message = it) } }
     }
-    
-    // Log when sdkVersion changes so we can debug UI updates
-    LaunchedEffect(sdkVersion) {
-        Log.d(TAG, "UI observed sdkVersion = $sdkVersion")
+
+    // 根据 Tab 过滤游戏
+    val displayedGames = when (selectedTab) {
+        0 -> uiState.games.filter { it.isLocal }   // 已安装
+        else -> uiState.allGames                    // 全部（完整游戏目录）
     }
 
     Scaffold(
-        snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
+        snackbarHost = { SnackbarHost(hostState = snackbarHostState) },
+        topBar = {
+            MyGameTopBar(
+                nickname = profile.nickname ?: "旅人",
+                level = adventureHome.currentLevel,
+                title = adventureHome.currentTitle,
+                onRefresh = { viewModel.refreshAll() }
+            )
+        }
     ) { innerPadding ->
         Box(
-            modifier = Modifier
-                .padding(innerPadding)
-                .fillMaxSize()
+            modifier = Modifier.padding(innerPadding).fillMaxSize()
         ) {
-            val currentLevel = UserLevelConfig.levelForExp(profile.exp)
-            val nextLevel = UserLevelConfig.nextLevel(currentLevel)
-            
-            // 游戏列表内容
-            if (uiState.games.isEmpty() && !uiState.isLoading) {
-                // 空状态
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // 1. User Profile Card
-                    item {
-                        UserProfileCard(
-                            level = currentLevel.level,
-                            title = currentLevel.title,
-                            exp = profile.exp,
-                            maxExp = nextLevel.requiredExp,
-                            nickname = profile.nickname ?: "玩家",
-                            coins = profile.coins,
-                            serverLevel = profile.level,
-                            expPercent = profile.expPercent,
-                            sdkVersion = sdkVersion,
-                            onSdkUpdate = { homeViewModel.refreshSdkOnly() },
-                            onRefresh = { homeViewModel.syncGameConfig() }
+            Column(modifier = Modifier.fillMaxSize()) {
+                AdventureLinkageSection(
+                    adventure = adventureHome,
+                    installedGameIds = uiState.games.map { it.gameId?.ifBlank { it.id } ?: it.id }.toSet(),
+                    onOpenTask = { taskId -> homeViewModel.navigateToTaskDetail(taskId) }
+                )
+
+                // Tab 分类
+                TabRow(selectedTabIndex = selectedTab,
+                    containerColor = MaterialTheme.colorScheme.surface) {
+                    tabs.forEachIndexed { index, label ->
+                        Tab(
+                            selected = selectedTab == index,
+                            onClick = { selectedTab = index },
+                            text = {
+                                Text(label, fontWeight = if (selectedTab == index)
+                                    FontWeight.Bold else FontWeight.Normal)
+                            }
                         )
                     }
+                }
 
-                    // 2. Stats Row
-                    item {
-                        UserStatsRow(uiState.games.size, 48) // Mock 48h for now
-                    }
-                    
-                    item {
-                        EmptyGameList(onRefresh = { viewModel.refreshGameList() })
+                Box(modifier = Modifier.weight(1f)) {
+                    if (displayedGames.isEmpty() && !uiState.isLoading) {
+                        EmptyGameList(
+                            message = if (selectedTab == 0) "暂无已安装的游戏" else "游戏库为空，请稍后刷新",
+                            onRefresh = { viewModel.refreshGameList() }
+                        )
+                    } else {
+                        LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(16.dp),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(displayedGames) { game ->
+                                GameItemCard(
+                                    game = game,
+                                    iconCacheManager = viewModel.iconCacheManager,
+                                    isDownloading = game.id == uiState.downloadingGameId,
+                                    downloadProgress = if (game.id == uiState.downloadingGameId) uiState.downloadProgress else 0f,
+                                    isDeleting = game.id == uiState.deletingGameId,
+                                    onPlay = { viewModel.playGame(game) },
+                                    onDownload = { viewModel.downloadGame(game) },
+                                    onUpdate = { viewModel.updateGame(game) },
+                                    onDelete = {
+                                        gameToDelete = game
+                                        showDeleteDialog = true
+                                    }
+                                )
+                            }
+                        }
                     }
                 }
-            } else {
-                // 游戏列表
-                GameList(
-                    games = uiState.games,
-                    downloadingGameId = uiState.downloadingGameId,
-                    downloadProgress = uiState.downloadProgress,
-                    deletingGameId = uiState.deletingGameId,
-                    sdkVersion = sdkVersion,
-                    onSdkUpdate = { homeViewModel.refreshSdkOnly() },
-                    onRefresh = { homeViewModel.syncGameConfig() },
-                    onPlay = { viewModel.playGame(it) },
-                    onDownload = { viewModel.downloadGame(it) },
-                    onUpdate = { viewModel.updateGame(it) },
-                    onDelete = { game ->
-                        Log.d(TAG, "点击删除: ${game.name} (${game.gameId})")
-                        gameToDelete = game
-                        showDeleteDialog = true
-                    },
-                    userProfile = profile
-                )
             }
-
-            // 加载指示器
-            if (uiState.isLoading) {
-                CircularProgressIndicator(
-                    modifier = Modifier.align(Alignment.Center)
-                )
-            }
-
-            // Delete Confirmation Dialog - 放在内容之后，保证覆盖在列表之上
             val pendingDeleteGame = gameToDelete
             if (showDeleteDialog && pendingDeleteGame != null) {
                 ConfirmOverlayDialog(
@@ -184,6 +180,187 @@ fun MyGameScreen(
                     }
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun AdventureLinkageSection(
+    adventure: AdventureHomeUiState,
+    installedGameIds: Set<String>,
+    onOpenTask: (String) -> Unit
+) {
+    val linkedTasks = remember(adventure) {
+        (adventure.recommendedTasks + adventure.chapterTasks)
+            .distinctBy { it.taskId }
+            .take(4)
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Card(
+            shape = RoundedCornerShape(18.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+            )
+        ) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = "当前历练 · ${adventure.currentChapterTitle}",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = "Lv.${adventure.currentLevel} ${adventure.currentTitle} · 已完成 ${adventure.completedTaskCount}/${adventure.requiredTaskCount} 个升级任务",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        }
+
+        if (linkedTasks.isEmpty()) {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "暂无历练联动推荐",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = adventure.emptyMessage
+                            ?: "先刷新游戏库或进入挑战页，系统会在这里展示当前章节相关的游戏与任务。",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else {
+            Text(
+                text = "与你当前历练相关的游戏",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            linkedTasks.forEach { task ->
+                AdventureLinkageTaskCard(
+                    task = task,
+                    isInstalled = installedGameIds.contains(task.gameId),
+                    onClick = { onOpenTask(task.taskId) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AdventureLinkageTaskCard(
+    task: AdventureTaskUiModel,
+    isInstalled: Boolean,
+    onClick: () -> Unit
+) {
+    val accentColor = when (task.status) {
+        AdventureTaskStatus.ACHIEVED -> Color(0xFFFFB300)
+        AdventureTaskStatus.IN_PROGRESS -> MaterialTheme.colorScheme.primary
+        AdventureTaskStatus.CLAIMED, AdventureTaskStatus.COMPLETED -> Color(0xFF43A047)
+        AdventureTaskStatus.LOCKED -> MaterialTheme.colorScheme.outline
+        AdventureTaskStatus.AVAILABLE -> MaterialTheme.colorScheme.secondary
+    }
+
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = task.gameName,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold
+                )
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = task.targetText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = accentColor.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = task.statusLabel,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = accentColor,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = if (isInstalled) MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)
+                        else MaterialTheme.colorScheme.secondary.copy(alpha = 0.12f)
+                    ) {
+                        Text(
+                            text = if (isInstalled) "已安装" else "待下载",
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isInstalled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            FilledTonalButton(onClick = onClick, shape = RoundedCornerShape(12.dp)) {
+                Text(if (task.status == AdventureTaskStatus.ACHIEVED) "去领奖" else "去挑战")
+            }
+        }
+    }
+}
+
+/** 轻量顶栏：昵称 + 等级徽章 + 刷新按钮 */
+@Composable
+private fun MyGameTopBar(
+    nickname: String,
+    level: Int,
+    title: String,
+    onRefresh: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(nickname, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            Text("Lv.$level $title",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        IconButton(onClick = onRefresh) {
+            Icon(Icons.Default.Refresh, contentDescription = "刷新",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
@@ -416,7 +593,10 @@ fun StatCard(
 }
 
 @Composable
-fun EmptyGameList(onRefresh: () -> Unit) {
+fun EmptyGameList(
+    message: String = "暂无已安装的游戏",
+    onRefresh: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -435,7 +615,7 @@ fun EmptyGameList(onRefresh: () -> Unit) {
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "暂无已安装的游戏",
+            text = message,
             style = MaterialTheme.typography.headlineMedium,
             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
         )
@@ -463,6 +643,7 @@ fun EmptyGameList(onRefresh: () -> Unit) {
 @Composable
 fun GameList(
     games: List<Custom.MyGameData>,
+    iconCacheManager: IconCacheManager,
     downloadingGameId: String?,
     downloadProgress: Float,
     deletingGameId: String?,
@@ -508,6 +689,7 @@ fun GameList(
         items(games) { game ->
             GameItemCard(
                 game = game,
+                iconCacheManager = iconCacheManager,
                 isDownloading = game.id == downloadingGameId,
                 downloadProgress = if (game.id == downloadingGameId) downloadProgress else 0f,
                 isDeleting = game.id == deletingGameId,
@@ -523,6 +705,7 @@ fun GameList(
 @Composable
 fun GameItemCard(
     game: Custom.MyGameData,
+    iconCacheManager: IconCacheManager,
     isDownloading: Boolean,
     downloadProgress: Float,
     isDeleting: Boolean,
@@ -535,6 +718,17 @@ fun GameItemCard(
         targetValue = downloadProgress,
         label = "下载进度"
     )
+
+    // 使用 IconCacheManager 异步加载图标（与 GameCardEnhanced 相同的方式）
+    val iconFile by produceState<File?>(initialValue = null, key1 = game.id, key2 = game.iconUrl) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                iconCacheManager.getGameIcon(0, game.iconUrl, game.iconUrl)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
@@ -562,32 +756,17 @@ fun GameItemCard(
                             .clip(RoundedCornerShape(12.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
-                        if (game.iconUrl.isNotBlank()) {
-                            AsyncImage(
-                                model = ImageRequest.Builder(LocalContext.current)
-                                    .data(game.iconUrl)
-                                    .crossfade(true)
-                                    .placeholder(R.drawable.ic_game_default)
-                                    .error(R.drawable.ic_game_default)
-                                    .fallback(R.drawable.ic_game_default)
-                                    .build(),
-                                contentDescription = game.name,
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop,
-                                error = painterResource(id = R.drawable.ic_game_default),
-                                placeholder = painterResource(id = R.drawable.ic_game_default),
-                                fallback = painterResource(id = R.drawable.ic_game_default)
-                            )
-                        } else {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_game_default),
-                                contentDescription = "默认游戏图标",
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Fit
-                            )
-                        }
+                        AsyncImage(
+                            model = iconFile ?: if (game.iconUrl.isNotBlank()) game.iconUrl else null,
+                            contentDescription = game.name,
+                            modifier = Modifier.fillMaxSize(),
+                            contentScale = ContentScale.Crop,
+                            error = painterResource(id = R.drawable.ic_game_default),
+                            placeholder = painterResource(id = R.drawable.ic_game_default),
+                            fallback = painterResource(id = R.drawable.ic_game_default)
+                        )
 
-                        // Status Icon：仅未安装时显示云朵下载，不再在已安装游戏图标上显示播放三角
+                        // Status Icon：仅未安装时显示云朵下载
                         if (!game.isLocal) {
                             Box(
                                 modifier = Modifier

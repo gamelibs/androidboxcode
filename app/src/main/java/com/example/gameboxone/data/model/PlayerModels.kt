@@ -46,5 +46,8 @@ data class PlayerMeResponse(
 data class PlayerSdkResponse(
     val beta: String,
     val release: String,
-    val sdkVersion: String
+    val sdkVersion: String,
+    val sdkFileName: String? = null,
+    val sdkSha256: String? = null,
+    val minAppVersion: String? = null
 )

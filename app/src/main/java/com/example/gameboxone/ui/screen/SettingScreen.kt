@@ -1,6 +1,8 @@
 package com.example.gameboxone.ui.screen
 
+import android.app.Activity
 import android.content.Context
+import androidx.core.content.edit
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -8,6 +10,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -30,8 +34,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.Locale
 import javax.inject.Inject
+import com.example.gameboxone.ads.AdManager
+import com.example.gameboxone.ads.ConsentManager
+import com.example.gameboxone.legal.LegalConfig
+import com.example.gameboxone.legal.findActivity
+import com.example.gameboxone.legal.openLegalDocument
 import com.example.gameboxone.manager.DataManager
+import com.example.gameboxone.base.AppDatabase
 import org.json.JSONObject
 
 /**
@@ -40,7 +51,9 @@ import org.json.JSONObject
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
-    private val dataManager: DataManager
+    private val dataManager: DataManager,
+    private val database: AppDatabase,
+    private val consentManager: ConsentManager
 ) : ViewModel() {
     private val TAG = "SettingsViewModel"
 
@@ -69,7 +82,7 @@ class SettingsViewModel @Inject constructor(
         private set
 
     // 环境与地址设置（env/betaUrl/resUrl）
-    var currentEnv by mutableStateOf("release")
+    var currentEnv by mutableStateOf("beta")
         private set
 
     var betaUrl by mutableStateOf("")
@@ -101,9 +114,10 @@ class SettingsViewModel @Inject constructor(
                 val storedEnv = prefs.getString("env_type", null)
                 val storedBeta = prefs.getString("env_beta_url", null)
                 val storedRelease = prefs.getString("env_release_url", null)
+                val manualOverride = prefs.getBoolean("env_manual_override", false)
 
-                if (storedEnv != null || storedBeta != null || storedRelease != null) {
-                    currentEnv = storedEnv ?: "release"
+                if (manualOverride && (storedEnv != null || storedBeta != null || storedRelease != null)) {
+                    currentEnv = storedEnv ?: "beta"
                     betaUrl = storedBeta.orEmpty()
                     releaseUrl = storedRelease.orEmpty()
                 } else {
@@ -126,7 +140,7 @@ class SettingsViewModel @Inject constructor(
                             null
                         }
 
-                        val envFromConfig = params?.optString("env")?.takeIf { it.isNotBlank() } ?: "release"
+                        val envFromConfig = params?.optString("env")?.takeIf { it.isNotBlank() } ?: "beta"
                         // 支持多种命名（beta / betaUrl）和（resUrl / release）
                         val betaFromConfig = params?.optString("betaUrl")
                             ?.takeIf { it.isNotBlank() }
@@ -140,7 +154,7 @@ class SettingsViewModel @Inject constructor(
                         releaseUrl = releaseFromConfig.orEmpty()
                     } catch (_: Exception) {
                         // 解析失败时使用默认值
-                        currentEnv = "release"
+                        currentEnv = "beta"
                         betaUrl = ""
                         releaseUrl = ""
                     }
@@ -155,14 +169,25 @@ class SettingsViewModel @Inject constructor(
     // 切换广告开关，并写回 SharedPreferences，供 GameDataBridge 使用
     fun toggleAdsEnabled(context: Context, enabled: Boolean) {
         isAdsEnabled = enabled
+        AdManager.setAdsEnabled(enabled)
         viewModelScope.launch {
             try {
                 val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("ad_consent_enabled", enabled).apply()
+                prefs.edit { putBoolean("ad_consent_enabled", enabled) }
                 com.example.gameboxone.AppLog.d(TAG, "切换广告开关: enabled=$enabled")
             } catch (_: Exception) {
                 // 忽略持久化异常，保持内存状态
             }
+        }
+    }
+
+    fun requiresPrivacyOptionsForm(): Boolean = consentManager.requiresPrivacyOptionsForm()
+
+    fun showPrivacyOptions(activity: Activity, onFinished: (Boolean) -> Unit = {}) {
+        consentManager.showPrivacyOptionsForm(activity) {
+            val canRequest = consentManager.canRequestAds()
+            AdManager.updateConsentState(activity.applicationContext, canRequest)
+            onFinished(canRequest)
         }
     }
 
@@ -188,17 +213,18 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 _uiState.value = _uiState.value.copy(isApplyingEnv = true)
-                val env = currentEnv.lowercase().trim().ifBlank { "release" }
+                val env = currentEnv.lowercase().trim().ifBlank { "beta" }
                 val beta = betaUrl.trim()
                 val release = releaseUrl.trim()
 
                 // 先将配置写入 SharedPreferences
                 val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-                prefs.edit()
-                    .putString("env_type", env)
-                    .putString("env_beta_url", beta)
-                    .putString("env_release_url", release)
-                    .apply()
+                prefs.edit {
+                    putBoolean("env_manual_override", true)
+                    putString("env_type", env)
+                    putString("env_beta_url", beta)
+                    putString("env_release_url", release)
+                }
 
                 // 当 beta/release 地址全部为空时，视为不覆盖，直接返回
                 if (beta.isBlank() && release.isBlank()) {
@@ -257,7 +283,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("dark_mode_enabled", enabled).apply()
+                prefs.edit { putBoolean("dark_mode_enabled", enabled) }
                 com.example.gameboxone.AppLog.d(TAG, "切换深色模式: enabled=$enabled")
 
                 // 同步到全局 ThemeManager，立刻触发主题重绘
@@ -277,7 +303,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("wifi_only_download", enabled).apply()
+                prefs.edit { putBoolean("wifi_only_download", enabled) }
                 com.example.gameboxone.AppLog.d(TAG, "切换仅WiFi下载: enabled=$enabled")
             } catch (_: Exception) { }
         }
@@ -291,7 +317,7 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("hardware_accel_enabled", enabled).apply()
+                prefs.edit { putBoolean("hardware_accel_enabled", enabled) }
                 com.example.gameboxone.AppLog.d(TAG, "切换硬件加速: enabled=$enabled")
             } catch (_: Exception) { }
         }
@@ -305,9 +331,50 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             try {
                 val prefs = appContext.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-                prefs.edit().putBoolean("game_sound_enabled", enabled).apply()
+                prefs.edit { putBoolean("game_sound_enabled", enabled) }
                 com.example.gameboxone.AppLog.d(TAG, "切换游戏音效: enabled=$enabled")
             } catch (_: Exception) { }
+        }
+    }
+
+    /**
+     * 检查并更新 SDK：
+     *  - 若远端版本与本地版本相同，弹出"已是最新版本"提示
+     *  - 若版本不同，触发强制更新并提示正在更新
+     */
+    fun checkAndUpdateSdk() {
+        viewModelScope.launch {
+            try {
+                _uiState.value = _uiState.value.copy(isSdkChecking = true)
+                val localSdk = try {
+                    database.appConfigDao().getLatestValue("sdk_version")?.trim().orEmpty()
+                } catch (_: Exception) { "" }
+                val remoteSdk = try {
+                    database.appConfigDao().getLatestValue("remote_sdk_version")?.trim().orEmpty()
+                } catch (_: Exception) { "" }
+
+                com.example.gameboxone.AppLog.d(TAG, "checkAndUpdateSdk: local=$localSdk remote=$remoteSdk")
+
+                val needsUpdate = remoteSdk.isNotBlank() && remoteSdk != localSdk
+                if (needsUpdate) {
+                    try {
+                        dataManager.preloadSdkOnly(force = true)
+                        _events.tryEmit(
+                            SettingsUiEvent.Snackbar("正在更新 SDK（$localSdk → $remoteSdk），请稍候...")
+                        )
+                    } catch (e: Exception) {
+                        com.example.gameboxone.AppLog.w(TAG, "checkAndUpdateSdk: 触发更新失败", e)
+                        _events.tryEmit(SettingsUiEvent.Snackbar("SDK 更新失败：${e.message ?: "未知错误"}"))
+                    }
+                } else {
+                    _events.tryEmit(SettingsUiEvent.ShowSdkUpToDateDialog)
+                }
+            } catch (e: Exception) {
+                com.example.gameboxone.AppLog.w(TAG, "checkAndUpdateSdk: 检查失败", e)
+                _events.tryEmit(SettingsUiEvent.Snackbar("SDK 检查失败：${e.message ?: "未知错误"}"))
+            } finally {
+                _uiState.value = _uiState.value.copy(isSdkChecking = false)
+            }
         }
     }
 
@@ -328,7 +395,7 @@ class SettingsViewModel @Inject constructor(
 
                 val sizeBytes = cacheDirs.sumOf { dir -> dir.walkBottomUp().filter { it.isFile }.sumOf { it.length() } }
                 val sizeMb = sizeBytes.toDouble() / (1024 * 1024)
-                _cacheSize.value = String.format("%.1f MB", sizeMb)
+                _cacheSize.value = String.format(Locale.getDefault(), "%.1f MB", sizeMb)
             } catch (_: Exception) {
                 _cacheSize.value = "未知"
             }
@@ -367,11 +434,13 @@ class SettingsViewModel @Inject constructor(
 data class SettingsUiState(
     val isLoading: Boolean = false,
     val showClearCacheDialog: Boolean = false,
-    val isApplyingEnv: Boolean = false
+    val isApplyingEnv: Boolean = false,
+    val isSdkChecking: Boolean = false
 )
 
 sealed class SettingsUiEvent {
     data class Snackbar(val message: String) : SettingsUiEvent()
+    object ShowSdkUpToDateDialog : SettingsUiEvent()
 }
 
 /**
@@ -386,6 +455,12 @@ fun SettingScreen(
     val cacheSize by viewModel.cacheSize.collectAsState()
     val context = LocalContext.current
     val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    // 对话框状态（需在 LaunchedEffect 之前声明，以免引用未声明变量）
+    var showClearCacheDialog by remember { mutableStateOf(false) }
+    var showAboutDialog by remember { mutableStateOf(false) }
+    var showSdkUpToDateDialog by remember { mutableStateOf(false) }
 
     // 首次进入设置页时，从 SharedPreferences 加载广告开关状态
     LaunchedEffect(Unit) {
@@ -396,13 +471,10 @@ fun SettingScreen(
         viewModel.events.collect { event ->
             when (event) {
                 is SettingsUiEvent.Snackbar -> snackbarHostState.showSnackbar(event.message)
+                is SettingsUiEvent.ShowSdkUpToDateDialog -> showSdkUpToDateDialog = true
             }
         }
     }
-
-    // 对话框状态
-    var showClearCacheDialog by remember { mutableStateOf(false) }
-    var showAboutDialog by remember { mutableStateOf(false) }
 
     Scaffold(
         snackbarHost = { SnackbarHost(hostState = snackbarHostState) }
@@ -464,7 +536,7 @@ fun SettingScreen(
                 SettingsSwitchItem(
                     title = "游戏音效",
                     description = "启用游戏中的声音效果",
-                    icon = Icons.Default.VolumeUp,
+                    icon = Icons.AutoMirrored.Filled.VolumeUp,
                     checked = viewModel.isSoundEnabled,
                     onCheckedChange = viewModel::toggleSound
                 )
@@ -482,6 +554,27 @@ fun SettingScreen(
                         viewModel.toggleAdsEnabled(context, enabled)
                     }
                 )
+                SettingsClickableItem(
+                    title = "广告隐私选项",
+                    description = "管理个性化广告与隐私同意设置",
+                    icon = Icons.Default.AdminPanelSettings
+                ) {
+                    val activity = context.findActivity()
+                    if (activity == null) {
+                        scope.launch { snackbarHostState.showSnackbar("当前无法打开隐私选项") }
+                    } else if (viewModel.requiresPrivacyOptionsForm()) {
+                        viewModel.showPrivacyOptions(activity) { canRequestAds ->
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    if (canRequestAds) "广告隐私选项已更新"
+                                    else "已更新隐私选项，当前将不再请求广告"
+                                )
+                            }
+                        }
+                    } else {
+                        scope.launch { snackbarHostState.showSnackbar("当前地区暂无可调整的广告隐私选项") }
+                    }
+                }
             }
 
             // 环境与地址设置
@@ -499,6 +592,18 @@ fun SettingScreen(
                 )
             }
 
+            // SDK 管理
+            item {
+                SettingSectionHeader(title = "SDK 管理")
+                SettingsClickableItem(
+                    title = "检查 SDK 更新",
+                    description = if (uiState.isSdkChecking) "检查中，请稍候..." else "点击检查并更新游戏引擎 SDK",
+                    icon = Icons.Default.CloudDownload
+                ) {
+                    if (!uiState.isSdkChecking) viewModel.checkAndUpdateSdk()
+                }
+            }
+
             // 关于与帮助
             item {
                 SettingSectionHeader(title = "关于")
@@ -514,14 +619,22 @@ fun SettingScreen(
                     description = "查看应用的隐私政策",
                     icon = Icons.Default.Shield
                 ) {
-                    // 导航到隐私政策页面或打开网页
+                    try {
+                        context.openLegalDocument(LegalConfig.LegalDocumentType.PRIVACY_POLICY)
+                    } catch (_: Exception) {
+                        scope.launch { snackbarHostState.showSnackbar("无法打开隐私政策链接") }
+                    }
                 }
                 SettingsClickableItem(
                     title = "用户协议",
                     description = "查看用户协议",
                     icon = Icons.Default.Description
                 ) {
-                    // 导航到用户协议页面或打开网页
+                    try {
+                        context.openLegalDocument(LegalConfig.LegalDocumentType.USER_AGREEMENT)
+                    } catch (_: Exception) {
+                        scope.launch { snackbarHostState.showSnackbar("无法打开用户协议链接") }
+                    }
                 }
             }
 
@@ -555,6 +668,17 @@ fun SettingScreen(
             dismissText = null,
             onConfirm = { showAboutDialog = false },
             onDismiss = { showAboutDialog = false }
+        )
+
+        // SDK 已是最新版本对话框
+        ConfirmOverlayDialog(
+            visible = showSdkUpToDateDialog,
+            title = "SDK 状态",
+            message = "当前已是最新版本，无需更新。",
+            confirmText = "确认",
+            dismissText = null,
+            onConfirm = { showSdkUpToDateDialog = false },
+            onDismiss = { showSdkUpToDateDialog = false }
         )
     }
 }
@@ -736,7 +860,7 @@ fun SettingsClickableItem(
                 )
             }
             Icon(
-                imageVector = Icons.Default.ChevronRight,
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )

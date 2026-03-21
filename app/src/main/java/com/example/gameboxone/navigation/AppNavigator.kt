@@ -33,11 +33,23 @@ class AppNavigator(private val navController: NavController) {
         when (event) {
             is NavigationEvent.Navigate -> {
                 Log.d(TAG, "处理导航事件: Navigate to ${event.route}")
-                navController.navigate(event.route)
+                if (event.route == NavGraphBuilders.Routes.HOME) {
+                    // 返回主界面时清除所有中间页（如 gameDetail），避免回退到已完成任务的详情页
+                    navController.navigate(event.route) {
+                        popUpTo(NavGraphBuilders.Routes.HOME) { inclusive = false }
+                        launchSingleTop = true
+                    }
+                } else {
+                    navController.navigate(event.route)
+                }
             }
             is NavigationEvent.NavigateToGameDetail -> {
                 Log.d(TAG, "处理导航事件: NavigateToGameDetail id=${event.gameId}")
                 navController.navigate("gameDetail/${event.gameId}")
+            }
+            is NavigationEvent.NavigateToAdventureTaskDetail -> {
+                Log.d(TAG, "处理导航事件: NavigateToAdventureTaskDetail taskId=${event.taskId}")
+                navController.navigate("adventureTaskDetail/${event.taskId}")
             }
 //            is NavigationEvent.NavigateToGamePlayer -> {
 //                Log.d(TAG, "处理导航事件: NavigateToGamePlayer id=${event.gameId}")

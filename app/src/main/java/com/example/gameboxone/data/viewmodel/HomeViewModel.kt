@@ -3,11 +3,14 @@ package com.example.gameboxone.data.viewmodel
 import com.example.gameboxone.AppLog as Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.manager.IconCacheManager
+import com.example.gameboxone.manager.LocalAdventureManager
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.event.DataEvent
+import com.example.gameboxone.event.TaskEvent
 import com.example.gameboxone.service.MessageService
 import com.example.gameboxone.ui.state.HomeScreenState
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,16 +20,24 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
+import com.example.gameboxone.data.model.ChapterMapNode
+import com.example.gameboxone.navigation.NavigationEvent
+// ...existing imports...
+
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     val iconCacheManager: IconCacheManager,
     private val dataManager: DataManager,
+    private val localAdventureManager: LocalAdventureManager,
     private val messageService: MessageService,
-    private val eventManager: EventManager // 添加 EventManager 依赖
+    private val eventManager: EventManager
 ) : ViewModel() {
     private val TAG = "HomeViewModel"
     private val _uiState = MutableStateFlow(HomeScreenState())
     val uiState: StateFlow<HomeScreenState> = _uiState.asStateFlow()
+
+    private val _chapterMap = MutableStateFlow<List<ChapterMapNode>>(emptyList())
+    val chapterMap: StateFlow<List<ChapterMapNode>> = _chapterMap.asStateFlow()
 
 
     init {
@@ -69,6 +80,16 @@ class HomeViewModel @Inject constructor(
                 }
             }
         }
+
+        // 监听任务领奖事件：玩家在游戏结算页确认领取后刷新首页状态
+        viewModelScope.launch {
+            eventManager.taskEvents.collect { event ->
+                if (event is TaskEvent.TaskClaimed) {
+                    Log.d(TAG, "收到 TaskClaimed 事件 taskId=${event.taskId}，刷新首页数据")
+                    loadGameData()
+                }
+            }
+        }
     }
 
     // 当 ViewModel 被清除时取消注册
@@ -81,11 +102,15 @@ class HomeViewModel @Inject constructor(
     private suspend fun loadGameData() {
         try {
             val games = dataManager.getGameConfigItems()
+            val adventureHome = buildAdventureState(games)
             _uiState.value = _uiState.value.copy(
                 isLoading = false,
                 games = games,
+                adventureHome = adventureHome,
                 error = null
             )
+            // 刷新章节地图
+            _chapterMap.value = localAdventureManager.loadChapterMap()
         } catch (e: Exception) {
             Log.e(TAG, "加载游戏数据失败", e)
             _uiState.value = _uiState.value.copy(
@@ -103,10 +128,12 @@ class HomeViewModel @Inject constructor(
                 _uiState.value = _uiState.value.copy(isLoading = true)
                 
                 val games = dataManager.getGameConfigItems()
+                val adventureHome = buildAdventureState(games)
 
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     games = games,
+                    adventureHome = adventureHome,
                     error = null
                 )
 
@@ -141,10 +168,12 @@ class HomeViewModel @Inject constructor(
                 
                 // 直接获取刷新后的数据并更新UI状态
                 val games = dataManager.getGameConfigItems(false)
+                val adventureHome = buildAdventureState(games)
                 _uiState.value = _uiState.value.copy(
                     isLoading = false,
                     isSyncing = false,
                     games = games,
+                    adventureHome = adventureHome,
                     error = null
                 )
                 
@@ -170,6 +199,62 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    /** 领取任务奖励，完成后刷新首页状态 */
+    fun claimReward(taskId: String) {
+        viewModelScope.launch {
+            val ok = localAdventureManager.claimTaskReward(taskId)
+            if (ok) {
+                loadGameData()
+                messageService.showMessage(UiMessage.Success(message = "奖励领取成功！"))
+            }
+        }
+    }
+
+    /** 模拟游玩（无真实游戏时的 demo 交互），完成后刷新首页状态 */
+    fun simulatePlay(taskId: String) {
+        viewModelScope.launch {
+            val achieved = localAdventureManager.simulatePlay(taskId)
+            loadGameData()
+            if (achieved) {
+                messageService.showMessage(UiMessage.Success(message = "任务达成！可以领取奖励了 🎉"))
+            } else {
+                messageService.showMessage(UiMessage.Info(message = "正在进行中，继续努力！"))
+            }
+        }
+    }
+
+    /** 执行升级操作，成功后刷新首页状态 */
+    fun doLevelUp() {
+        viewModelScope.launch {
+            val ok = localAdventureManager.tryLevelUp()
+            if (ok) {
+                loadGameData()
+                messageService.showMessage(UiMessage.Success(message = "🎊 恭喜晋级！解锁了下一章新挑战！"))
+            } else {
+                messageService.showMessage(UiMessage.Error(message = "升级条件未满足，还需完成更多挑战"))
+            }
+        }
+    }
+
+    /** 导航到历练任务详情页 */
+    fun navigateToTaskDetail(taskId: String) {
+        viewModelScope.launch {
+            eventManager.emitNavigationEvent(NavigationEvent.NavigateToAdventureTaskDetail(taskId))
+        }
+    }
+
+    /** 从地图页进入章节入口任务 */
+    fun navigateToChapterEntry(chapterId: String) {
+        viewModelScope.launch {
+            val taskId = localAdventureManager.getChapterEntryTaskId(chapterId)
+            if (taskId.isNullOrBlank()) {
+                messageService.showMessage(UiMessage.Info(message = "该章节暂时没有可进入的挑战任务"))
+                return@launch
+            }
+            eventManager.emitNavigationEvent(NavigationEvent.NavigateToAdventureTaskDetail(taskId))
+        }
+    }
+
     // 仅刷新 SDK，不刷新游戏列表
     fun refreshSdkOnly() {
         viewModelScope.launch {
@@ -186,4 +271,11 @@ class HomeViewModel @Inject constructor(
             }
         }
     }
+
+    private suspend fun buildAdventureState(games: List<GameConfigItem>) =
+        run {
+            runCatching { dataManager.syncAdventureConfigIfNeeded(force = false) }
+                .onFailure { Log.w(TAG, "同步远端历练配置失败，继续使用本地配置", it) }
+            localAdventureManager.loadHomeUiState(games)
+        }
 }

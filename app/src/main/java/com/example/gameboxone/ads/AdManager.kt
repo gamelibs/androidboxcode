@@ -100,10 +100,6 @@ object AdManager {
      * 现在需要在获得用户同意后才能初始化
      */
     fun initializeWithConsent(context: Context, consentManager: ConsentManager) {
-        if (isInitialized) {
-            Log.d(TAG, "AdManager 已经初始化")
-            return
-        }
         val isDebug = isDebug(context)
         val testDeviceId = if (isDebug) {
             try { computeTestDeviceHashedId(context) } catch (e: Exception) { Log.w(TAG, "computeTestDeviceHashedId failed", e); null }
@@ -115,24 +111,35 @@ object AdManager {
             isDebug = isDebug,
             testDeviceHashedId = testDeviceId
         ) { canRequest ->
-            canRequestAds = canRequest
-            Log.d(TAG, "用户同意流程完成，可以请求广告: $canRequest")
-            if (canRequest) {
-                allowTestAdsWithoutConsent = false
+            updateConsentState(context, canRequest)
+        }
+    }
+
+    fun updateConsentState(context: Context, canRequest: Boolean) {
+        canRequestAds = canRequest
+        val isDebug = isDebug(context)
+        Log.d(TAG, "用户同意状态更新，可以请求广告: $canRequest")
+
+        if (canRequest) {
+            allowTestAdsWithoutConsent = false
+            if (!isInitialized) {
                 initializeMobileAds(context)
-            } else {
-                if (isDebug) {
-                    // Debug 模式下：启用仅测试广告，不依赖同意
-                    allowTestAdsWithoutConsent = true
-                    appOpenUnitOverride = TEST_APP_OPEN_UNIT
-                    interstitialUnitOverride = TEST_INTERSTITIAL_UNIT
-                    rewardedUnitOverride = TEST_REWARDED_UNIT
-                    Log.w(TAG, "Debug 未获同意：启用测试广告位覆盖并初始化 MobileAds，仅用于开发验证")
-                    initializeMobileAds(context)
-                } else {
-                    Log.w(TAG, "用户未同意或同意获取失败，不初始化广告")
-                }
             }
+            return
+        }
+
+        if (isDebug) {
+            allowTestAdsWithoutConsent = true
+            appOpenUnitOverride = TEST_APP_OPEN_UNIT
+            interstitialUnitOverride = TEST_INTERSTITIAL_UNIT
+            rewardedUnitOverride = TEST_REWARDED_UNIT
+            Log.w(TAG, "Debug 未获同意：启用测试广告位覆盖并初始化 MobileAds，仅用于开发验证")
+            if (!isInitialized) {
+                initializeMobileAds(context)
+            }
+        } else {
+            allowTestAdsWithoutConsent = false
+            Log.w(TAG, "用户未同意或同意获取失败，不初始化新广告请求")
         }
     }
 

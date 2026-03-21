@@ -2,7 +2,7 @@ package com.example.gameboxone.utils
 
 import android.annotation.SuppressLint
 import android.content.Context
-import android.os.Build
+import android.content.pm.ApplicationInfo
 import android.webkit.WebSettings
 import android.webkit.WebView
 
@@ -22,8 +22,6 @@ object WebSettingsUtils {
             javaScriptCanOpenWindowsAutomatically = true
             allowFileAccess = true
             allowContentAccess = true
-            allowFileAccessFromFileURLs = true
-            allowUniversalAccessFromFileURLs = true
 
             // 缓存配置
 //            setAppCacheEnabled(false)  // 使用新的缓存API
@@ -37,22 +35,16 @@ object WebSettingsUtils {
             setSupportMultipleWindows(false)
             loadWithOverviewMode = true
             useWideViewPort = true
-
-            // 性能优化
-            setRenderPriority(WebSettings.RenderPriority.HIGH)
-            setEnableSmoothTransition(true)
             
             // 媒体播放支持
             mediaPlaybackRequiresUserGesture = false
-            
-            // 设置存储路径
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            }
+
+            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
         }
 
-        // 调试模式
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT) {
+        // 调试模式：仅在可调试构建中开启
+        val isDebuggable = (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (isDebuggable) {
             WebView.setWebContentsDebuggingEnabled(true)
         }
     }

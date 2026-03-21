@@ -11,11 +11,13 @@ package com.example.gameboxone
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
-import android.os.Bundle
 import android.media.AudioManager
-import android.util.Log
+import android.os.Bundle
+import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.WindowManager
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebResourceError
@@ -24,12 +26,23 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.FrameLayout
+import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
+import androidx.annotation.LayoutRes
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import com.example.gameboxone.AppLog as Log
+import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.EventManager
+import com.example.gameboxone.manager.GameTaskEventHandler
 import com.example.gameboxone.manager.MyGameManager
 import com.example.gameboxone.manager.WebServerManager
+import com.example.gameboxone.manager.LocalAdventureManager
+import com.example.gameboxone.event.TaskEvent
 import com.example.gameboxone.utils.WebSettingsUtils
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -38,8 +51,6 @@ import kotlinx.coroutines.MainScope
 import kotlinx.coroutines.launch
 import java.io.File
 import javax.inject.Inject
-import android.view.LayoutInflater
-import androidx.annotation.LayoutRes
 
 private const val TAG = "WebViewActivity"
 
@@ -78,10 +89,13 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     private var gameUrl: String? = null
     private var gameId: String? = null  // 添加游戏ID字段
 
+    /** WebViewBridgeRegistrar 通过此属性读取当前游戏 ID，用于任务进度关联 */
+    val exposedGameId: String? get() = gameId
+
     // topbar（宿主 UI，包含返回/暂停/得分）
     private lateinit var layoutTopbar: LinearLayout
-    private lateinit var btnBack: android.widget.ImageButton
-    private lateinit var btnPause: android.widget.ImageButton
+    private lateinit var btnBack: ImageButton
+    private lateinit var btnPause: ImageButton
     private lateinit var tvScore: TextView
 
     @Inject
@@ -94,11 +108,23 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     lateinit var myGameManager: MyGameManager  // 添加游戏管理器
 
     @Inject
-    lateinit var dataManager: com.example.gameboxone.manager.DataManager
+    lateinit var dataManager: DataManager
 
-     // 添加错误处理和生命周期相关字段
-     private var hasError = false
-     private var isDestroyed = false
+    @Inject
+    lateinit var localAdventureManager: LocalAdventureManager
+
+    /** 任务事件处理器：将游戏 SDK 事件转换为任务进度，由 WebViewBridgeRegistrar 读取 */
+    @Inject
+    lateinit var gameTaskEventHandler: GameTaskEventHandler
+
+    // 当前已达成但尚未结算的任务信息（首个 ACHIEVED 事件）
+    private var pendingAchievedTask: TaskEvent.TaskAchieved? = null
+    // 防止同一场游戏重复弹出目标达成提示
+    private var goalAchievedShown = false
+    private var hasReportedGameExit = false
+
+    // 添加错误处理和生命周期相关字段
+    private var hasError = false
 
 
     // 标志：表示当前是否正在展示广告（由 JS-bridge 在展示广告前设置）
@@ -112,7 +138,17 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // 2) 该标志用于原生层决定在窗口失去焦点、音频焦点或生命周期变化时是否应当暂停/恢复 WebView 或游戏逻辑。
         // 3) 注意：此方法只更新原生状态，不会直接操作 WebView 或注入 JS。如需通知 H5，使用 notifyJsAdWillShow()/notifyJsAdClosed().
         isAdBeingDisplayed = value
-        Log.d(com.example.gameboxone.TAG, "setAdBeingDisplayed = $value")
+        Log.d(TAG, "setAdBeingDisplayed = $value")
+    }
+
+    private val backPressedCallback = object : OnBackPressedCallback(true) {
+        override fun handleOnBackPressed() {
+            if (hasError) {
+                retryLoading()
+            } else {
+                goBack()
+            }
+        }
     }
 
     // Overlay 覆盖层视图
@@ -141,20 +177,20 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         super.onCreate(savedInstanceState)
 
         // Make this activity fullscreen (hide status and navigation bars)
-        androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        val insetsController = androidx.core.view.WindowInsetsControllerCompat(window, window.decorView)
-        insetsController.hide(androidx.core.view.WindowInsetsCompat.Type.systemBars())
-        insetsController.systemBarsBehavior = androidx.core.view.WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val insetsController = WindowInsetsControllerCompat(window, window.decorView)
+        insetsController.hide(WindowInsetsCompat.Type.systemBars())
+        insetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
 
         // 根据设置页的“硬件加速”开关控制当前 Activity 的硬件加速
         try {
-            val prefs = getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+            val prefs = getSharedPreferences("game_preferences", MODE_PRIVATE)
             val accelEnabled = prefs.getBoolean("hardware_accel_enabled", true)
             if (!accelEnabled) {
-                window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                window.clearFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
                 Log.d(TAG, "硬件加速已根据设置关闭")
             } else {
-                window.addFlags(android.view.WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
+                window.addFlags(WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED)
                 Log.d(TAG, "硬件加速已根据设置开启")
             }
         } catch (e: Exception) {
@@ -165,16 +201,17 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
         // 初始化视图（绑定 layout 中的所有子视图引用）
         initViews()
+        onBackPressedDispatcher.addCallback(this, backPressedCallback)
 
         // 初始化音频管理器
-        audioManager = getSystemService(Context.AUDIO_SERVICE) as? AudioManager
+        audioManager = getSystemService(AUDIO_SERVICE) as? AudioManager
         
         // 获取游戏路径和 ID（由 caller 传入）
         gamePath = intent.getStringExtra(KEY_GAME_PATH)
         gameId = intent.getStringExtra(KEY_GAME_ID)
         
         if (gamePath == null) {
-            showError("没有提供游戏路径，无法启动游戏")
+            showError(getString(R.string.webview_error_missing_game_path))
             return
         }
 
@@ -215,6 +252,17 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // 设置 WebView 并启动本地静态文件服务器以便加载游戏
         setupWebView()
         startLocalServer()
+
+        // 监听任务达成事件 —— 当分数/通关满足任务目标时，GameTaskEventHandler 会向此 flow 发布事件
+        launch(Dispatchers.Main) {
+            eventManager.taskEvents.collect { event ->
+                if (event is TaskEvent.TaskAchieved && !goalAchievedShown) {
+                    goalAchievedShown = true
+                    pendingAchievedTask = event
+                    showGoalAchievedOverlay(event)
+                }
+            }
+        }
     }
 
     /**
@@ -222,7 +270,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
      */
     private fun trySyncSoundSettingToJs() {
         try {
-            val prefs = getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+            val prefs = getSharedPreferences("game_preferences", MODE_PRIVATE)
             val soundEnabled = prefs.getBoolean("game_sound_enabled", true)
             val value = if (soundEnabled) 1 else 0
 
@@ -341,7 +389,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                 layoutTopbar.visibility = View.VISIBLE
                 // update score display
                 val scoreToShow = currentScore ?: 0
-                tvScore.text = "当前得分:${scoreToShow}"
+                tvScore.text = getString(R.string.webview_score_label, scoreToShow)
                 btnPause.tag = "playing"
                 webView.evaluateJavascript(
                     "(function(){ if(window.resumeGame) { window.resumeGame(); } if(window.__appResume) { window.__appResume(); } })()",
@@ -414,7 +462,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     private fun validateGamePath(): Boolean {
         val gameDir = File(gamePath!!)
         if (!gameDir.exists() || !gameDir.isDirectory) {
-            showError("游戏目录不存在: $gamePath")
+            showError(getString(R.string.webview_error_game_dir_missing, gamePath))
             Log.e(TAG, "游戏目录不存在或无效: $gamePath")
             return false
         }
@@ -422,7 +470,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         // 检查游戏目录下是否有index.html文件
         val indexFile = File(gameDir, "index.html")
         if (!indexFile.exists()) {
-            showError("游戏文件不完整，缺少主页文件")
+            showError(getString(R.string.webview_error_game_index_missing))
             Log.e(TAG, "游戏目录中没有找到index.html: $gamePath")
             return false
         }
@@ -442,12 +490,6 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         webView = WebView(this).apply {
             // 使用统一的WebSettings工具类配置
             WebSettingsUtils.setSettings(this@WebViewActivity, this)
-
-            // Register JS bridge before loading content
-            // Note: addJavascriptInterface should be used only with trusted content (we serve local files)
-            this@WebViewActivity.runOnUiThread {
-
-            }
 
             // 硬件加速 - 对WebGL至关重要
             setLayerType(View.LAYER_TYPE_HARDWARE, null)
@@ -490,8 +532,8 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
             webViewClient = object : WebViewClient() {
                 // 拦截 URL 加载，使用 WebView 自己加载
-                override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
-                    view.loadUrl(url)
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    view.loadUrl(request.url.toString())
                     return true
                 }
 
@@ -515,17 +557,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                 ) {
                     super.onReceivedError(view, request, error)
                     // 仅在主 Frame 加载失败时展示错误页面，避免因为 favicon 等资源失败导致整页报错
-                    val isMainFrame = if (request != null) {
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
-                            request.isForMainFrame
-                        } else {
-                            // 旧版本无法直接判断，只能通过 URL 近似判断
-                            val failingUrl = request.url?.toString() ?: ""
-                            failingUrl == gameUrl || failingUrl.endsWith("/index.html")
-                        }
-                    } else {
-                        true
-                    }
+                    val isMainFrame = request?.isForMainFrame ?: true
 
                     if (!isMainFrame) {
                         Log.w(TAG, "子资源加载错误（忽略）: ${error?.errorCode} ${error?.description}")
@@ -533,8 +565,14 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     }
 
                     hasError = true
-                    val errorMessage = error?.let { "错误 ${it.errorCode}: ${it.description}" } ?: "未知错误"
-                    showError("加载错误: $errorMessage")
+                    val errorMessage = error?.let {
+                        getString(
+                            R.string.webview_error_load_detail,
+                            it.errorCode,
+                            it.description ?: getString(R.string.webview_error_load_unknown)
+                        )
+                    } ?: getString(R.string.webview_error_load_unknown)
+                    showError(getString(R.string.webview_error_load, errorMessage))
                 }
             }
         }
@@ -576,7 +614,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
                 override fun updateLevel(level: String) {
                     runOnUiThread {
-                        try { overlayTask?.text = "关卡: $level" } catch (_: Exception) { }
+                        try { overlayTask?.text = getString(R.string.webview_level_label, level) } catch (_: Exception) { }
                     }
                 }
 
@@ -584,7 +622,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                     runOnUiThread {
                         try {
                             currentScore = score.toIntOrNull()
-                            tvScore.text = "当前得分:${currentScore ?: 0}"
+                            tvScore.text = getString(R.string.webview_score_label, currentScore ?: 0)
                         } catch (_: Exception) { }
                     }
                 }
@@ -611,6 +649,10 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                         "game_over" -> {
                             runOnUiThread {
                                 try {
+                                    if (!hasReportedGameExit) {
+                                        gameId?.takeIf { it.isNotBlank() }?.let { gameTaskEventHandler.onGameExit(it) }
+                                        hasReportedGameExit = true
+                                    }
                                     // 仅显示 restart 游戏面板，不再调用 WebView.onPause()/pauseTimers，
                                     // 避免阻断后续页面执行；音频停止交由游戏自身在 game_over 场景中处理。
                                     inflateOverlay(R.layout.view_restart_game)
@@ -673,7 +715,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                         val game = dataManager.getGameById(id)
                         val patch = game?.patch ?: 0
                         if (!url.isNullOrEmpty() && patch > 0) {
-                            url = if (url!!.contains("?")) {
+                            url = if (url.contains("?")) {
                                 "$url&v=$patch"
                             } else {
                                 "$url?v=$patch"
@@ -691,13 +733,18 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                         Log.d(TAG, "加载游戏URL: $url")
                         webView.loadUrl(url)
                     } else {
-                        showError("无法获取游戏URL")
+                        showError(getString(R.string.webview_error_game_url_missing))
                     }
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "启动本地服务器失败", e)
                 launch(Dispatchers.Main) {
-                    showError("启动游戏服务失败: ${e.message}")
+                    showError(
+                        getString(
+                            R.string.webview_error_server_start_failed,
+                            e.message ?: getString(R.string.webview_error_load_unknown)
+                        )
+                    )
                 }
             }
         }
@@ -707,8 +754,11 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
      * 更新加载进度条
      * @param progress [0,100]
      */
+    @Suppress("UNUSED_PARAMETER")
     private fun updateLoadingProgress(progress: Int) {
-        // 保留占位：如需基于 progress 做额外处理可在此扩展
+        if (progress >= 100) {
+            layoutLoading.visibility = View.GONE
+        }
     }
 
     /**
@@ -716,13 +766,6 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
      */
     private fun showLoading() {
         // 已不再使用独立 loading 覆盖层，这里保持布局为隐藏状态
-        layoutLoading.visibility = View.GONE
-    }
-
-    /**
-     * 隐藏 loading 显示 web 内容
-     */
-    private fun hideLoading() {
         layoutLoading.visibility = View.GONE
     }
 
@@ -745,6 +788,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             // 清除错误状态，重新加载
             hasError = false
             layoutError.visibility = View.GONE
+            layoutWeb.visibility = View.VISIBLE
             webView.reload()
         }
     }
@@ -754,6 +798,86 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
      */
     private fun recordGameStart() {
         // TODO: 记录游戏启动事件
+    }
+
+    /**
+     * 目标达成提示层：当任务首次达到 ACHIEVED 状态时，在 WebView 上弹出。
+     * 保留游戏在后台运行；用户点击"完成"后切换到结算层。
+     */
+    private fun showGoalAchievedOverlay(event: TaskEvent.TaskAchieved) {
+        runOnUiThread {
+            try {
+                inflateOverlay(R.layout.view_goal_achieved)
+                // 填入任务信息
+                layoutOverlay.findViewById<TextView>(R.id.goal_task_title)
+                    ?.text = event.taskTitle
+                layoutOverlay.findViewById<TextView>(R.id.goal_task_desc)
+                    ?.text = event.taskDescription
+                layoutOverlay.findViewById<TextView>(R.id.goal_reward_text)
+                    ?.text = getString(R.string.webview_reward_summary, event.rewardExp, event.rewardCoins)
+                // 点击"完成"切换到结算层（不立即领奖，先展示结算信息）
+                layoutOverlay.findViewById<Button>(R.id.btn_goal_complete)
+                    ?.setOnClickListener {
+                        showSettlementOverlay()
+                    }
+                layoutOverlay.visibility = View.VISIBLE
+                layoutTopbar.visibility = View.GONE
+                Log.d(TAG, "目标达成层已展示: taskId=${event.taskId}")
+            } catch (e: Exception) {
+                Log.w(TAG, "showGoalAchievedOverlay failed", e)
+            }
+        }
+    }
+
+    /**
+     * 结算层：展示任务详情和奖励，用户点击"确认领取"后：
+     * 1. 在 IO 线程调用 claimTaskReward 写入数据库
+     * 2. 向 EventManager 发布 TaskClaimed 事件，通知 HomeViewModel 刷新
+     * 3. 关闭 WebViewActivity，返回主界面
+     */
+    private fun showSettlementOverlay() {
+        val achieved = pendingAchievedTask ?: run {
+            finish()
+            return
+        }
+        runOnUiThread {
+            try {
+                inflateOverlay(R.layout.view_task_settlement)
+                layoutOverlay.findViewById<TextView>(R.id.settlement_task_title)
+                    ?.text = achieved.taskTitle
+                layoutOverlay.findViewById<TextView>(R.id.settlement_task_desc)
+                    ?.text = achieved.taskDescription
+                layoutOverlay.findViewById<TextView>(R.id.settlement_reward_exp)
+                    ?.text = getString(R.string.webview_reward_exp, achieved.rewardExp)
+                layoutOverlay.findViewById<TextView>(R.id.settlement_reward_coins)
+                    ?.text = getString(R.string.webview_reward_coins, achieved.rewardCoins)
+
+                layoutOverlay.findViewById<Button>(R.id.btn_confirm_claim)
+                    ?.setOnClickListener {
+                        // 领取奖励并返回主界面
+                        launch(Dispatchers.IO) {
+                            try {
+                                val ok = localAdventureManager.claimTaskReward(achieved.taskId)
+                                Log.d(TAG, "claimTaskReward taskId=${achieved.taskId} ok=$ok")
+                                // 无论是否成功，都通知 HomeViewModel 刷新
+                                eventManager.emitTaskEvent(TaskEvent.TaskClaimed(achieved.taskId))
+                            } catch (e: Exception) {
+                                Log.e(TAG, "claimTaskReward 失败", e)
+                            } finally {
+                                launch(Dispatchers.Main) {
+                                    finish()
+                                }
+                            }
+                        }
+                    }
+                layoutOverlay.visibility = View.VISIBLE
+                layoutTopbar.visibility = View.GONE
+                Log.d(TAG, "结算层已展示: taskId=${achieved.taskId}")
+            } catch (e: Exception) {
+                Log.w(TAG, "showSettlementOverlay failed", e)
+                finish()
+            }
+        }
     }
 
     /**
@@ -773,7 +897,17 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
 
     override fun onDestroy() {
         super.onDestroy()
-        isDestroyed = true
+
+        if (!hasReportedGameExit) {
+            gameId?.takeIf { it.isNotBlank() }?.let {
+                try {
+                    gameTaskEventHandler.onGameExit(it)
+                    hasReportedGameExit = true
+                } catch (e: Exception) {
+                    Log.w(TAG, "onDestroy: 上报退出事件失败", e)
+                }
+            }
+        }
 
         // 恢复媒体音量
         muteWebViewAudio(false)
@@ -797,17 +931,6 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         }
     }
 
-    override fun onBackPressed() {
-        // 处理返回键，优先级高于其他事件
-        if (hasError) {
-            // 如果当前处于错误状态，重试加载
-            retryLoading()
-        } else {
-            // 否则按常规方式处理返回
-            super.onBackPressed()
-        }
-    }
-
     /**
      * Show banner ad in the WebView layout
      */
@@ -817,17 +940,17 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             hideBannerAd()
 
             // Add banner to the bottom of the layout
-            val layoutParams = android.widget.FrameLayout.LayoutParams(
-                android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                android.widget.FrameLayout.LayoutParams.WRAP_CONTENT
+            val layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
             ).apply {
-                gravity = android.view.Gravity.BOTTOM or android.view.Gravity.CENTER_HORIZONTAL
+                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             }
 
             layoutWeb.addView(bannerView, layoutParams)
-            Log.d(com.example.gameboxone.TAG, "Banner ad view added to layout")
+            Log.d(TAG, "Banner ad view added to layout")
         } catch (e: Exception) {
-            Log.w(com.example.gameboxone.TAG, "Failed to show banner ad", e)
+            Log.w(TAG, "Failed to show banner ad", e)
         }
     }
 
@@ -841,12 +964,12 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                 val child = layoutWeb.getChildAt(i)
                 if (child is com.google.android.gms.ads.AdView) {
                     layoutWeb.removeView(child)
-                    Log.d(com.example.gameboxone.TAG, "Banner ad view removed from layout")
+                    Log.d(TAG, "Banner ad view removed from layout")
                     break
                 }
             }
         } catch (e: Exception) {
-            Log.w(com.example.gameboxone.TAG, "Failed to hide banner ad", e)
+            Log.w(TAG, "Failed to hide banner ad", e)
         }
     }
 
@@ -857,26 +980,26 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     fun closeGameAndUninstall() {
         val id = gameId
         if (id.isNullOrBlank()) {
-            Log.w(com.example.gameboxone.TAG, "closeGameAndUninstall: no gameId, just finish")
-            try { finish() } catch (e: Exception) { Log.w(com.example.gameboxone.TAG, "finish failed", e) }
+            Log.w(TAG, "closeGameAndUninstall: no gameId, just finish")
+            try { finish() } catch (e: Exception) { Log.w(TAG, "finish failed", e) }
             return
         }
-        Log.d(com.example.gameboxone.TAG, "closeGameAndUninstall: will finish activity immediately and uninstall in background for $id")
+        Log.d(TAG, "closeGameAndUninstall: will finish activity immediately and uninstall in background for $id")
 
         // Finish immediately so UI returns to main scene
         try {
             finish()
         } catch (e: Exception) {
-            Log.w(com.example.gameboxone.TAG, "finish failed", e)
+            Log.w(TAG, "finish failed", e)
         }
 
         // Perform uninstall asynchronously; do not block UI
         launch(Dispatchers.IO) {
             try {
                 val success = myGameManager.deleteGame(id)
-                Log.d(com.example.gameboxone.TAG, "closeGameAndUninstall: background uninstall result for $id = $success")
+                Log.d(TAG, "closeGameAndUninstall: background uninstall result for $id = $success")
             } catch (e: Exception) {
-                Log.e(com.example.gameboxone.TAG, "closeGameAndUninstall: background uninstall failed for $id", e)
+                Log.e(TAG, "closeGameAndUninstall: background uninstall failed for $id", e)
             }
         }
     }

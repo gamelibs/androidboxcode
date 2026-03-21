@@ -3,10 +3,9 @@ package com.example.gameboxone.ui.navigation
 import com.example.gameboxone.AppLog as Log
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
-import androidx.navigation.NavController
+import androidx.compose.material.icons.filled.SportsEsports
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
@@ -14,10 +13,12 @@ import androidx.navigation.navArgument
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.gameboxone.data.model.Custom
 import com.example.gameboxone.ui.screen.GameDetailScreen
+import com.example.gameboxone.ui.screen.AdventureTaskDetailScreen
 import androidx.compose.runtime.LaunchedEffect
 import java.net.URLDecoder
 import androidx.activity.compose.BackHandler
 import com.example.gameboxone.data.viewmodel.GameDetailViewModel
+import com.example.gameboxone.data.viewmodel.AdventureTaskDetailViewModel
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -36,6 +37,7 @@ object NavGraphBuilders {
         const val MY_GAME = "myGame"
         const val SETTING = "setting"
         const val PROFILE = "profile"
+        const val ADVENTURE_TASK_DETAIL = "adventureTaskDetail/{taskId}"
     }
 
 
@@ -44,18 +46,18 @@ object NavGraphBuilders {
     val bottomNavItems = listOf(
         Custom.NavItem(
             route = Routes.HOME,
-            title = "首页",
-            icon = { Icons.Default.Home }
+            title = "挑战", // Was "首页"
+            icon = { Icons.Default.Home } // Represents "Base" or "Current Task"
         ),
         Custom.NavItem(
             route = Routes.ADVENTURE,
-            title = "历练",
-            icon = { Icons.Default.Star } // Using Star for Adventure/Town
+            title = "地图", // Was "历练"
+            icon = { Icons.Default.Map } // Represents "World Map"
         ),
         Custom.NavItem(
             route = Routes.MY_GAME,
-            title = "我的游戏",
-            icon = { Icons.Default.Person } // Reverted to Person or maybe SportsEsports if available
+            title = "藏经阁",
+            icon = { Icons.Default.SportsEsports }
         ),
         Custom.NavItem(
             route = Routes.SETTING,
@@ -192,3 +194,36 @@ fun NavGraphBuilder.gamePlayerNavGraph() {
 }
 
 private const val TAG = "NavGraphBuilders"
+
+/**
+ * 历练任务详情导航图
+ */
+fun NavGraphBuilder.adventureTaskDetailNavGraph() {
+    Log.d(TAG, "构建历练任务详情导航图")
+    composable(
+        route = NavGraphBuilders.Routes.ADVENTURE_TASK_DETAIL,
+        arguments = listOf(
+            navArgument("taskId") { type = NavType.StringType }
+        ),
+        enterTransition = {
+            fadeIn(animationSpec = tween(300)) +
+                    slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300))
+        },
+        exitTransition = {
+            fadeOut(animationSpec = tween(300)) +
+                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+        },
+        popEnterTransition = {
+            fadeIn(animationSpec = tween(300)) +
+                    slideInHorizontally(initialOffsetX = { -it }, animationSpec = tween(300))
+        },
+        popExitTransition = {
+            fadeOut(animationSpec = tween(300)) +
+                    slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+        }
+    ) {
+        val viewModel = hiltViewModel<AdventureTaskDetailViewModel>()
+        BackHandler(enabled = true) { viewModel.onBackPressed() }
+        AdventureTaskDetailScreen(viewModel = viewModel)
+    }
+}

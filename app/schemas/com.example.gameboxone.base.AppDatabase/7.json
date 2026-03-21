@@ -1,0 +1,506 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 7,
+    "identityHash": "ffdef0d4eb4a0b71d0c59a481ad8f68a",
+    "entities": [
+      {
+        "tableName": "app_config",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `value` TEXT NOT NULL)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "value",
+            "columnName": "value",
+            "affinity": "TEXT",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "game_config",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `gameId` TEXT NOT NULL, `pubId` INTEGER NOT NULL, `ret` INTEGER NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `rating` INTEGER NOT NULL, `gameRes` TEXT NOT NULL, `info` TEXT, `diff` INTEGER NOT NULL, `download` TEXT NOT NULL, `downicon` TEXT, `patch` INTEGER NOT NULL, `timestamp` TEXT, `isLocal` INTEGER NOT NULL, `localPath` TEXT NOT NULL, `size` TEXT NOT NULL, `categories` TEXT NOT NULL, `tags` TEXT NOT NULL, `taskPointsJson` TEXT)",
+        "fields": [
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "pubId",
+            "columnName": "pubId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "ret",
+            "columnName": "ret",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "icon",
+            "columnName": "icon",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rating",
+            "columnName": "rating",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameRes",
+            "columnName": "gameRes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "info",
+            "columnName": "info",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "diff",
+            "columnName": "diff",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "download",
+            "columnName": "download",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "downicon",
+            "columnName": "downicon",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "patch",
+            "columnName": "patch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "timestamp",
+            "columnName": "timestamp",
+            "affinity": "TEXT",
+            "notNull": false
+          },
+          {
+            "fieldPath": "isLocal",
+            "columnName": "isLocal",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localPath",
+            "columnName": "localPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "size",
+            "columnName": "size",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "categories",
+            "columnName": "categories",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "tags",
+            "columnName": "tags",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskPointsJson",
+            "columnName": "taskPointsJson",
+            "affinity": "TEXT",
+            "notNull": false
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": true,
+          "columnNames": [
+            "id"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "my_games",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`gameId` TEXT NOT NULL, `name` TEXT NOT NULL, `icon` TEXT NOT NULL, `gameRes` TEXT NOT NULL, `description` TEXT NOT NULL, `downloadUrl` TEXT NOT NULL, `localPath` TEXT NOT NULL, `patch` INTEGER NOT NULL, `size` TEXT NOT NULL, `installTime` INTEGER NOT NULL, `lastPlayTime` INTEGER, `playCount` INTEGER NOT NULL, PRIMARY KEY(`gameId`))",
+        "fields": [
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "name",
+            "columnName": "name",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "icon",
+            "columnName": "icon",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameRes",
+            "columnName": "gameRes",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "description",
+            "columnName": "description",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "downloadUrl",
+            "columnName": "downloadUrl",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localPath",
+            "columnName": "localPath",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "patch",
+            "columnName": "patch",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "size",
+            "columnName": "size",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "installTime",
+            "columnName": "installTime",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "lastPlayTime",
+            "columnName": "lastPlayTime",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "playCount",
+            "columnName": "playCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "gameId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "local_adventure_profile",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`profileId` INTEGER NOT NULL, `localPlayerId` TEXT NOT NULL, `localPlayerName` TEXT NOT NULL, `currentLevel` INTEGER NOT NULL, `currentChapterId` TEXT NOT NULL, `totalExp` INTEGER NOT NULL, `totalCoins` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`profileId`))",
+        "fields": [
+          {
+            "fieldPath": "profileId",
+            "columnName": "profileId",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localPlayerId",
+            "columnName": "localPlayerId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "localPlayerName",
+            "columnName": "localPlayerName",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentLevel",
+            "columnName": "currentLevel",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentChapterId",
+            "columnName": "currentChapterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalExp",
+            "columnName": "totalExp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalCoins",
+            "columnName": "totalCoins",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "profileId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "local_adventure_task_definition",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`taskId` TEXT NOT NULL, `chapterId` TEXT NOT NULL, `level` INTEGER NOT NULL, `slotNo` INTEGER NOT NULL, `gameId` TEXT NOT NULL, `taskType` TEXT NOT NULL, `targetValue` INTEGER NOT NULL, `taskTitle` TEXT NOT NULL, `taskDescription` TEXT NOT NULL, `rewardExp` INTEGER NOT NULL, `rewardCoins` INTEGER NOT NULL, `isRequiredForUpgrade` INTEGER NOT NULL, PRIMARY KEY(`taskId`))",
+        "fields": [
+          {
+            "fieldPath": "taskId",
+            "columnName": "taskId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chapterId",
+            "columnName": "chapterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "level",
+            "columnName": "level",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "slotNo",
+            "columnName": "slotNo",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskType",
+            "columnName": "taskType",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "targetValue",
+            "columnName": "targetValue",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskTitle",
+            "columnName": "taskTitle",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "taskDescription",
+            "columnName": "taskDescription",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rewardExp",
+            "columnName": "rewardExp",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rewardCoins",
+            "columnName": "rewardCoins",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "isRequiredForUpgrade",
+            "columnName": "isRequiredForUpgrade",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "taskId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      },
+      {
+        "tableName": "local_adventure_task_progress",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`taskId` TEXT NOT NULL, `chapterId` TEXT NOT NULL, `gameId` TEXT NOT NULL, `status` TEXT NOT NULL, `currentScore` INTEGER NOT NULL, `currentStage` INTEGER NOT NULL, `clearCount` INTEGER NOT NULL, `startCount` INTEGER NOT NULL, `totalPlaySeconds` INTEGER NOT NULL, `exitCount` INTEGER NOT NULL, `achievedAt` INTEGER, `claimedAt` INTEGER, `updatedAt` INTEGER NOT NULL, PRIMARY KEY(`taskId`))",
+        "fields": [
+          {
+            "fieldPath": "taskId",
+            "columnName": "taskId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "chapterId",
+            "columnName": "chapterId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "gameId",
+            "columnName": "gameId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "status",
+            "columnName": "status",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentScore",
+            "columnName": "currentScore",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "currentStage",
+            "columnName": "currentStage",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "clearCount",
+            "columnName": "clearCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "startCount",
+            "columnName": "startCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "totalPlaySeconds",
+            "columnName": "totalPlaySeconds",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "exitCount",
+            "columnName": "exitCount",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "achievedAt",
+            "columnName": "achievedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "claimedAt",
+            "columnName": "claimedAt",
+            "affinity": "INTEGER",
+            "notNull": false
+          },
+          {
+            "fieldPath": "updatedAt",
+            "columnName": "updatedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "taskId"
+          ]
+        },
+        "indices": [],
+        "foreignKeys": []
+      }
+    ],
+    "views": [],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ffdef0d4eb4a0b71d0c59a481ad8f68a')"
+    ]
+  }
+}

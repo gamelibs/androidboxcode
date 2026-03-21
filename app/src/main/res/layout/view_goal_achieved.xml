@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  目标达成提示层：在游戏内得分/通关达成任务目标时浮现在 WebView 上方。
+  外层半透明遮罩 + 中心弹出卡片，提供任务名称、奖励预览、"完成"按钮。
+-->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#99000000">
+
+    <!-- 关闭/返回按钮（左上角） -->
+    <ImageButton
+        android:id="@+id/btn_close_overlay"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:layout_gravity="top|start"
+        android:layout_margin="12dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:contentDescription="@string/webview_overlay_close"
+        android:src="@android:drawable/ic_menu_close_clear_cancel"
+        app:tint="#FFFFFF" />
+
+    <!-- 中央提示卡片 -->
+    <LinearLayout
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/bg_overlay_card"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <!-- 图标 + 标题行 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:orientation="horizontal">
+
+            <TextView
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:gravity="center"
+                android:text="@string/webview_goal_title_emoji"
+                android:textSize="22sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:text="@string/webview_goal_title"
+                android:textColor="#FFFFFF"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 分割线 -->
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="1dp"
+            android:layout_marginBottom="12dp"
+            android:layout_marginTop="12dp"
+            android:background="#44FFFFFF" />
+
+        <!-- 任务名称（由代码填入） -->
+        <TextView
+            android:id="@+id/goal_task_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/webview_goal_task_placeholder"
+            android:textColor="#E0E0E0"
+            android:textSize="15sp" />
+
+        <!-- 任务描述（由代码填入） -->
+        <TextView
+            android:id="@+id/goal_task_desc"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:gravity="center"
+            android:text=""
+            android:textColor="#AAAAAA"
+            android:textSize="13sp" />
+
+        <!-- 奖励信息 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="#33FFFFFF"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:padding="10dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/webview_goal_reward_emoji"
+                android:textSize="14sp" />
+
+            <TextView
+                android:id="@+id/goal_reward_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/webview_goal_reward_placeholder"
+                android:textColor="#FFD700"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- 完成按钮 -->
+        <Button
+            android:id="@+id/btn_goal_complete"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="20dp"
+            android:background="@drawable/bg_green_game_button"
+            android:text="@string/webview_goal_complete_action"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+</FrameLayout>
+

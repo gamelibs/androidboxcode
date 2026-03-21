@@ -8,6 +8,11 @@ import android.net.NetworkRequest
 import android.os.Build
 import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.data.model.GameConfigItem
+import com.example.gameboxone.data.model.AdventureChapterSpec
+import com.example.gameboxone.data.model.AdventureFullConfig
+import com.example.gameboxone.data.model.AdventureHomeResponse
+import com.example.gameboxone.data.model.AdventureRewardPackageSpec
+import com.example.gameboxone.data.model.AdventureVersionResponse
 import com.google.gson.Gson
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
@@ -291,6 +296,161 @@ class NetManager @Inject constructor(
         return Gson().fromJson(json, object : TypeToken<T>() {}.type)
     }
 
+    private suspend fun getText(url: String, token: String? = null): String {
+        val client = httpClient.newBuilder()
+            .connectTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            .readTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            .writeTimeout(TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+            .build()
+
+        val requestBuilder = Request.Builder()
+            .url(url)
+            .get()
+
+        token?.trim()?.takeIf { it.isNotBlank() }?.let {
+            requestBuilder.header("Authorization", "Bearer $it")
+        }
+
+        return suspendCancellableCoroutine { continuation ->
+            client.newCall(requestBuilder.build()).enqueue(object : Callback {
+                override fun onFailure(call: Call, e: IOException) {
+                    if (!continuation.isCompleted) continuation.resumeWithException(e)
+                }
+
+                override fun onResponse(call: Call, response: okhttp3.Response) {
+                    if (continuation.isCompleted) return
+                    try {
+                        val text = response.body?.string().orEmpty()
+                        if (!response.isSuccessful) {
+                            continuation.resumeWithException(HttpStatusException(response.code, text))
+                            return
+                        }
+                        continuation.resume(text)
+                    } catch (e: Exception) {
+                        continuation.resumeWithException(e)
+                    }
+                }
+            })
+
+            continuation.invokeOnCancellation {
+                client.dispatcher.cancelAll()
+            }
+        }
+    }
+
+    private fun unwrapDataPayload(responseBody: String): String {
+        val gson = Gson()
+        val root = gson.fromJson(responseBody, JsonElement::class.java)
+        return if (root != null && root.isJsonObject && root.asJsonObject.has("data")) {
+            val data = root.asJsonObject.get("data")
+            if (data != null && !data.isJsonNull) data.toString() else "null"
+        } else {
+            responseBody
+        }
+    }
+
+    private fun buildUrl(basePath: String, query: Map<String, String?> = emptyMap()): String {
+        if (query.isEmpty()) return basePath
+        val encoded = query.entries
+            .filter { !it.value.isNullOrBlank() }
+            .joinToString("&") { entry ->
+                "${java.net.URLEncoder.encode(entry.key, Charsets.UTF_8.name())}=" +
+                    java.net.URLEncoder.encode(entry.value.orEmpty(), Charsets.UTF_8.name())
+            }
+        return if (encoded.isBlank()) basePath else "$basePath?$encoded"
+    }
+
+    suspend fun getAdventureVersion(platformId: String): Result<AdventureVersionResponse> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) return@withContext Result.failure(IOException("网络不可用"))
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) return@withContext Result.failure(IOException("BASE_URL is blank"))
+
+        val url = buildUrl("$base/api/v1/site/adventure/version", mapOf("platformId" to platformId))
+        return@withContext try {
+            val payload = unwrapDataPayload(getText(url))
+            Result.success(Gson().fromJson(payload, AdventureVersionResponse::class.java))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAdventureConfig(platformId: String): Result<AdventureFullConfig> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) return@withContext Result.failure(IOException("网络不可用"))
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) return@withContext Result.failure(IOException("BASE_URL is blank"))
+
+        val url = buildUrl("$base/api/v1/site/adventure/config", mapOf("platformId" to platformId))
+        return@withContext try {
+            val payload = unwrapDataPayload(getText(url))
+            Result.success(Gson().fromJson(payload, AdventureFullConfig::class.java))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAdventureHome(platformId: String, chapterId: String? = null): Result<AdventureHomeResponse> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) return@withContext Result.failure(IOException("网络不可用"))
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) return@withContext Result.failure(IOException("BASE_URL is blank"))
+
+        val url = buildUrl(
+            "$base/api/v1/site/adventure/home",
+            mapOf("platformId" to platformId, "chapterId" to chapterId)
+        )
+        return@withContext try {
+            val payload = unwrapDataPayload(getText(url))
+            Result.success(Gson().fromJson(payload, AdventureHomeResponse::class.java))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAdventureChapter(platformId: String, chapterId: String): Result<AdventureChapterSpec> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) return@withContext Result.failure(IOException("网络不可用"))
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) return@withContext Result.failure(IOException("BASE_URL is blank"))
+
+        val url = buildUrl(
+            "$base/api/v1/site/adventure/chapter/${chapterId.trim()}",
+            mapOf("platformId" to platformId)
+        )
+        return@withContext try {
+            val payload = unwrapDataPayload(getText(url))
+            Result.success(Gson().fromJson(payload, AdventureChapterSpec::class.java))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAdventureRewardPackages(platformId: String): Result<List<AdventureRewardPackageSpec>> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) return@withContext Result.failure(IOException("网络不可用"))
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) return@withContext Result.failure(IOException("BASE_URL is blank"))
+
+        val url = buildUrl("$base/api/v1/site/adventure/reward-packages", mapOf("platformId" to platformId))
+        return@withContext try {
+            val payload = unwrapDataPayload(getText(url))
+            val type = object : TypeToken<List<AdventureRewardPackageSpec>>() {}.type
+            Result.success(Gson().fromJson(payload, type))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun getAdventureFallback(platformId: String): Result<AdventureFullConfig> = withContext(Dispatchers.IO) {
+        if (!checkNetworkNow()) return@withContext Result.failure(IOException("网络不可用"))
+        val base = BASE_URL.trimEnd('/')
+        if (base.isBlank()) return@withContext Result.failure(IOException("BASE_URL is blank"))
+
+        val url = buildUrl("$base/api/v1/site/adventure/fallback", mapOf("platformId" to platformId))
+        return@withContext try {
+            val payload = unwrapDataPayload(getText(url))
+            Result.success(Gson().fromJson(payload, AdventureFullConfig::class.java))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     /**
      * 获取 SDK 信息（需要 token）
      * GET /api/v1/player/sdk
@@ -352,10 +512,11 @@ class NetManager @Inject constructor(
     /**
      * 仅更新 SDK URL/版本/文件名，不改动 BASE_URL/REMOTE_CONFIG_URL。
      */
-    fun applySdkInfo(sdkUrl: String, sdkVersion: String?) {
+    fun applySdkInfo(sdkUrl: String, sdkVersion: String?, sdkFileName: String? = null) {
         try {
             val url = sdkUrl.trim()
-            val fileName = url.substringAfterLast('/').takeIf { it.isNotBlank() }
+            val fileName = sdkFileName?.trim()?.takeIf { it.isNotBlank() }
+                ?: url.substringAfterLast('/').takeIf { it.isNotBlank() }
             updateSdkOnly(url, sdkVersion?.trim(), fileName)
         } catch (e: Exception) {
             Log.e(TAG, "applySdkInfo failed", e)
@@ -542,7 +703,9 @@ class NetManager @Inject constructor(
                     if (paramsObj != null && paramsObj.entrySet().isNotEmpty()) {
                         val env = paramsObj.getAsJsonPrimitive("env")?.asString ?: ""
                         val betaUrl = paramsObj.getAsJsonPrimitive("betaUrl")?.asString
+                            ?: paramsObj.getAsJsonPrimitive("beta")?.asString
                         val resUrl = paramsObj.getAsJsonPrimitive("resUrl")?.asString
+                            ?: paramsObj.getAsJsonPrimitive("release")?.asString
                         val gameSdkUrl = paramsObj.getAsJsonPrimitive("gameSdkUrl")?.asString
                         val gameSdkName = paramsObj.getAsJsonPrimitive("gameSdkName")?.asString
                         val gameConfigUrl = paramsObj.getAsJsonPrimitive("gameConfigUrl")?.asString
@@ -661,7 +824,9 @@ class NetManager @Inject constructor(
                     val paramsObj = container.getAsJsonObject("params") ?: throw IOException("配置中缺少 'params' 字段")
                     val env = paramsObj.getAsJsonPrimitive("env")?.asString ?: ""
                     val betaUrl = paramsObj.getAsJsonPrimitive("betaUrl")?.asString
+                        ?: paramsObj.getAsJsonPrimitive("beta")?.asString
                     val resUrl = paramsObj.getAsJsonPrimitive("resUrl")?.asString
+                        ?: paramsObj.getAsJsonPrimitive("release")?.asString
                     val gameSdkUrl = paramsObj.getAsJsonPrimitive("gameSdkUrl")?.asString
                     val gameSdkName = paramsObj.getAsJsonPrimitive("gameSdkName")?.asString
                     val gameConfigUrl = paramsObj.getAsJsonPrimitive("gameConfigUrl")?.asString

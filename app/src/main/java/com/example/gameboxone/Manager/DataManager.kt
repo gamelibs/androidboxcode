@@ -9,7 +9,6 @@ import com.example.gameboxone.data.model.AppConfigItem
 import com.example.gameboxone.data.model.GameConfigItem
 import com.example.gameboxone.data.model.MyGameItem
 import com.example.gameboxone.event.DataEvent
-import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.service.MessageService
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -21,8 +20,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.util.concurrent.atomic.AtomicBoolean
-import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 import com.example.gameboxone.di.ApplicationScope
@@ -40,6 +39,7 @@ class DataManager @Inject constructor(
     private val eventManager: EventManager, // 添加 EventManager 依赖
     private val sdkManager: SdkManager, // 注入 SdkManager，用于在远端对比后触发 SDK 预加载/更新
     private val userManager: UserManager, // 注入 UserManager，用于获取 token 拉取玩家游戏列表
+    private val localAdventureManager: LocalAdventureManager,
     @ApplicationScope private val applicationScope: CoroutineScope // 注入进程级 CoroutineScope，替代 GlobalScope
 ) {
     private val TAG = "DataManager"
@@ -47,13 +47,6 @@ class DataManager @Inject constructor(
     // 避免重复弹窗（请求远程配置失败）
     private val remoteConfigFailureShown = AtomicBoolean(false)
 
-
-    // 配置文件目录
-    private val configDir by lazy {
-        File(context.filesDir, "config").apply {
-            if (!exists()) mkdirs()
-        }
-    }
 
     // 数据事件流 - 重定向到 EventManager 的事件流
     val dataEvents: SharedFlow<DataEvent> = eventManager.dataEvents
@@ -68,12 +61,105 @@ class DataManager @Inject constructor(
     private var lastCacheTime: Long = 0
     private val CACHE_VALID_TIME = 5 * 60 * 1000 // 5分钟
 
+    private suspend fun putAppConfig(name: String, value: String?) {
+        if (value.isNullOrBlank()) return
+        try {
+            database.appConfigDao().insertConfig(AppConfigItem(name = name, value = value))
+        } catch (e: Exception) {
+            Log.w(TAG, "写入 app_config 失败: $name", e)
+        }
+    }
+
+    private suspend fun getAppConfig(name: String): String? {
+        return try {
+            database.appConfigDao().getLatestValue(name)
+        } catch (e: Exception) {
+            Log.w(TAG, "读取 app_config 失败: $name", e)
+            null
+        }
+    }
+
+    private fun readPlatformIdFromAssets(): String {
+        return try {
+            val jsonString = context.assets.open("gameconfig.json")
+                .bufferedReader()
+                .use { it.readText() }
+            val rootObj = Gson().fromJson(jsonString, com.google.gson.JsonObject::class.java)
+            rootObj?.getAsJsonObject("params")
+                ?.getAsJsonPrimitive("platformId")
+                ?.asString
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: "1003"
+        } catch (_: Exception) {
+            "1003"
+        }
+    }
+
+    private fun currentPlatformId(): String {
+        return try {
+            val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+            prefs.getString("platform_id", null)
+                ?.trim()
+                ?.takeIf { it.isNotBlank() }
+                ?: readPlatformIdFromAssets()
+        } catch (_: Exception) {
+            readPlatformIdFromAssets()
+        }
+    }
+
+    private data class PreferredEnvConfig(
+        val env: String,
+        val betaUrl: String?,
+        val releaseUrl: String?
+    )
+
+    private fun readPreferredEnvConfig(): PreferredEnvConfig {
+        return try {
+            val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
+            val manualOverride = prefs.getBoolean("env_manual_override", false)
+            val storedEnv = prefs.getString("env_type", null)?.trim()?.lowercase()
+            val storedBeta = prefs.getString("env_beta_url", null)?.trim()?.takeIf { !it.isNullOrBlank() }
+            val storedRelease = prefs.getString("env_release_url", null)?.trim()?.takeIf { !it.isNullOrBlank() }
+            if (manualOverride && (!storedEnv.isNullOrBlank() || storedBeta != null || storedRelease != null)) {
+                return PreferredEnvConfig(
+                    env = storedEnv?.ifBlank { "beta" } ?: "beta",
+                    betaUrl = storedBeta,
+                    releaseUrl = storedRelease
+                )
+            }
+
+            val jsonString = context.assets.open("gameconfig.json").bufferedReader().use { it.readText() }
+            val rootObj = Gson().fromJson(jsonString, com.google.gson.JsonObject::class.java)
+            val params = rootObj?.getAsJsonObject("params")
+            PreferredEnvConfig(
+                env = params?.getAsJsonPrimitive("env")?.asString?.trim()?.lowercase()?.ifBlank { "beta" } ?: "beta",
+                betaUrl = params?.getAsJsonPrimitive("betaUrl")?.asString?.trim()?.takeIf { it.isNotBlank() }
+                    ?: params?.getAsJsonPrimitive("beta")?.asString?.trim()?.takeIf { it.isNotBlank() },
+                releaseUrl = params?.getAsJsonPrimitive("resUrl")?.asString?.trim()?.takeIf { it.isNotBlank() }
+                    ?: params?.getAsJsonPrimitive("release")?.asString?.trim()?.takeIf { it.isNotBlank() }
+            )
+        } catch (_: Exception) {
+            PreferredEnvConfig(env = "beta", betaUrl = null, releaseUrl = null)
+        }
+    }
+
+    private suspend fun reapplyPreferredEnvOverride() {
+        val preferred = readPreferredEnvConfig()
+        if (preferred.betaUrl.isNullOrBlank() && preferred.releaseUrl.isNullOrBlank()) return
+        applyEnvOverrideFromSettings(
+            env = preferred.env,
+            betaUrl = preferred.betaUrl,
+            resUrl = preferred.releaseUrl
+        )
+    }
+
     private suspend fun fetchGameListWithAuthFallback(purpose: String): Result<List<GameConfigItem>> {
-        // 先尝试“登录成功后带 token 请求新接口”
+        // 仅使用新接口：登录成功后带 token 请求 /api/v1/player/published-games
         val tokenResult = try {
             userManager.ensurePlayerSession()
         } catch (e: Exception) {
-            Log.w(TAG, "$purpose: ensurePlayerSession 异常，将回退旧接口", e)
+            Log.w(TAG, "$purpose: ensurePlayerSession 异常，无法调用新游戏列表接口", e)
             Result.failure(e)
         }
 
@@ -82,31 +168,23 @@ class DataManager @Inject constructor(
             Log.d(TAG, "$purpose: 使用 token 拉取玩家游戏列表 (/api/v1/player/published-games)")
             val r = netManager.getGameList(token)
             if (r.isSuccess) return r
-            Log.w(TAG, "$purpose: token 拉取失败，将回退旧接口: ${r.exceptionOrNull()?.message}")
+            Log.w(TAG, "$purpose: 新游戏列表接口调用失败: ${r.exceptionOrNull()?.message}")
         } else {
-            Log.w(TAG, "$purpose: token 不可用，将回退旧接口: ${tokenResult.exceptionOrNull()?.message}")
+            Log.w(TAG, "$purpose: token 不可用，无法调用新游戏列表接口: ${tokenResult.exceptionOrNull()?.message}")
         }
 
-        // 登录失败/无 token：回退旧接口（REMOTE_CONFIG_URL）
-        Log.d(TAG, "$purpose: 回退旧接口拉取游戏列表 (REMOTE_CONFIG_URL)")
-        return netManager.getGameListLegacy()
+        return Result.failure(
+            tokenResult.exceptionOrNull()
+                ?: IOException("无法调用 /api/v1/player/published-games，且已停用旧游戏列表接口")
+        )
     }
 
     private fun currentEnvType(): String {
-        return try {
-            val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
-            prefs.getString("env_type", null)
-                ?.lowercase()
-                ?.trim()
-                ?.takeIf { it.isNotBlank() }
-                ?: "release"
-        } catch (_: Exception) {
-            "release"
-        }
+        return readPreferredEnvConfig().env
     }
 
     /**
-     * 拉取 SDK 信息：优先走 /api/v1/player/sdk（token）；失败则回退使用现有 NetManager 参数（旧逻辑）。
+     * 拉取 SDK 信息：仅走 /api/v1/player/sdk（token）；失败后只允许继续使用本地缓存 / assets，不再调用旧远端接口。
      */
     private suspend fun fetchSdkInfoWithAuthFallback(purpose: String): Result<Unit> {
         val env = currentEnvType()
@@ -114,7 +192,7 @@ class DataManager @Inject constructor(
         val sessionResult = try {
             userManager.ensurePlayerSession()
         } catch (e: Exception) {
-            Log.w(TAG, "$purpose: ensurePlayerSession 异常，将回退旧 SDK 逻辑", e)
+            Log.w(TAG, "$purpose: ensurePlayerSession 异常，无法调用新 SDK 接口", e)
             Result.failure(e)
         }
 
@@ -125,7 +203,7 @@ class DataManager @Inject constructor(
             if (sdkResult.isSuccess) {
                 val sdk = sdkResult.getOrThrow()
                 val sdkUrl = if (env == "beta") sdk.beta else sdk.release
-                netManager.applySdkInfo(sdkUrl, sdk.sdkVersion)
+                netManager.applySdkInfo(sdkUrl, sdk.sdkVersion, sdk.sdkFileName)
 
                 // 持久化到 app_config，供 UI 读取 remote_sdk_version / sdk_url
                 try {
@@ -138,13 +216,102 @@ class DataManager @Inject constructor(
                 }
                 return Result.success(Unit)
             } else {
-                Log.w(TAG, "$purpose: /api/v1/player/sdk 失败，将回退旧 SDK 逻辑: ${sdkResult.exceptionOrNull()?.message}")
+                Log.w(TAG, "$purpose: /api/v1/player/sdk 失败，后续仅允许使用本地缓存 / assets: ${sdkResult.exceptionOrNull()?.message}")
             }
         } else {
-            Log.w(TAG, "$purpose: token 不可用，将回退旧 SDK 逻辑: ${sessionResult.exceptionOrNull()?.message}")
+            Log.w(TAG, "$purpose: token 不可用，无法调用新 SDK 接口: ${sessionResult.exceptionOrNull()?.message}")
         }
 
         return Result.success(Unit)
+    }
+
+    suspend fun syncAdventureConfigIfNeeded(force: Boolean = false) = withContext(Dispatchers.IO) {
+        try {
+            if (!netManager.checkNetworkNow()) {
+                Log.d(TAG, "syncAdventureConfigIfNeeded: 网络不可用，跳过远端历练配置同步")
+                return@withContext
+            }
+
+            val paramsOk = try {
+                applyParamsFromAssets()
+            } catch (e: Exception) {
+                Log.w(TAG, "syncAdventureConfigIfNeeded: applyParamsFromAssets 失败", e)
+                false
+            }
+            if (!paramsOk) return@withContext
+
+            val platformId = currentPlatformId()
+            val versionResult = netManager.getAdventureVersion(platformId)
+            val version = versionResult.getOrNull()
+            if (version == null) {
+                Log.w(TAG, "syncAdventureConfigIfNeeded: 拉取 /version 失败: ${versionResult.exceptionOrNull()?.message}")
+                if (force || getAppConfig("adventure_config_json").isNullOrBlank()) {
+                    val fallback = netManager.getAdventureFallback(platformId).getOrNull()
+                    if (fallback != null) {
+                        putAppConfig("adventure_fallback_json", Gson().toJson(fallback))
+                        localAdventureManager.invalidateConfigCache()
+                    }
+                }
+                return@withContext
+            }
+
+            putAppConfig("adventure_config_version", version.configVersion.toString())
+            putAppConfig("adventure_config_semver", version.version)
+            putAppConfig("adventure_config_published_at", version.publishedAt)
+            putAppConfig("adventure_min_app_version", version.minAppVersion)
+
+            val cachedConfigVersion = getAppConfig("adventure_config_version_cached")?.toIntOrNull()
+            val cachedConfigJson = getAppConfig("adventure_config_json")
+            val shouldRefreshConfig = force || cachedConfigJson.isNullOrBlank() || cachedConfigVersion != version.configVersion
+
+            if (shouldRefreshConfig) {
+                val configResult = netManager.getAdventureConfig(platformId)
+                val remoteConfig = configResult.getOrNull()
+                if (remoteConfig != null) {
+                    putAppConfig("adventure_config_json", Gson().toJson(remoteConfig))
+                    putAppConfig("adventure_config_version_cached", remoteConfig.configVersion.toString())
+                    putAppConfig("adventure_config_semver_cached", remoteConfig.version)
+                    putAppConfig("adventure_config_published_at_cached", remoteConfig.publishedAt)
+                    localAdventureManager.invalidateConfigCache()
+                    Log.d(TAG, "syncAdventureConfigIfNeeded: 已更新远端历练配置 version=${remoteConfig.configVersion}")
+                } else {
+                    Log.w(TAG, "syncAdventureConfigIfNeeded: 拉取 /config 失败: ${configResult.exceptionOrNull()?.message}")
+                }
+            } else {
+                Log.d(TAG, "syncAdventureConfigIfNeeded: 远端历练配置版本未变化，跳过 /config")
+            }
+
+            val currentChapterId = try {
+                localAdventureManager.getCurrentChapterIdForSync()
+            } catch (e: Exception) {
+                Log.w(TAG, "syncAdventureConfigIfNeeded: 读取当前章节失败，回退 chapter_01", e)
+                "chapter_01"
+            }
+
+            netManager.getAdventureHome(platformId, currentChapterId).getOrNull()?.let { home ->
+                putAppConfig("adventure_home_json", Gson().toJson(home))
+                putAppConfig("adventure_home_chapter_id", currentChapterId)
+                putAppConfig("adventure_home_config_version", home.configVersion.toString())
+            }
+
+            netManager.getAdventureChapter(platformId, currentChapterId).getOrNull()?.let { chapter ->
+                putAppConfig("adventure_chapter_json_$currentChapterId", Gson().toJson(chapter))
+            }
+
+            if (force || getAppConfig("adventure_reward_packages_json").isNullOrBlank()) {
+                netManager.getAdventureRewardPackages(platformId).getOrNull()?.let { rewardPackages ->
+                    putAppConfig("adventure_reward_packages_json", Gson().toJson(rewardPackages))
+                }
+            }
+
+            if (force || getAppConfig("adventure_fallback_json").isNullOrBlank()) {
+                netManager.getAdventureFallback(platformId).getOrNull()?.let { fallback ->
+                    putAppConfig("adventure_fallback_json", Gson().toJson(fallback))
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "syncAdventureConfigIfNeeded: 整体流程失败", e)
+        }
     }
 
     /**
@@ -328,6 +495,7 @@ class DataManager @Inject constructor(
                         Log.d(TAG, "预加载路径：开始通过 fetchGameConfigFromNetwork 刷新远端配置")
                         val merged = fetchGameConfigFromNetwork()
                         Log.d(TAG, "预加载路径：远端刷新完成，最新数据量=${merged.size}")
+                        syncAdventureConfigIfNeeded(force = false)
                         // 通知订阅方：远端刷新已完成（用于触发 SDK 版本等 UI 更新）
                         try {
                             eventManager.emitDataEvent(DataEvent.RefreshCompleted)
@@ -376,14 +544,14 @@ class DataManager @Inject constructor(
                 // 触发 SDK 对比/预加载（保证即便是在 fallback 路径也会去检查 SDK）
                 try {
                     Log.d(TAG, "fallback 路径：触发 SDK 对比/预加载")
-	                    applicationScope.launch(Dispatchers.IO) {
-	                        try {
-	                            val remoteSdkVersion = try {
-	                                database.appConfigDao().getLatestValue("remote_sdk_version")
-	                            } catch (e: Exception) {
-	                                Log.w(TAG, "fallback 路径：读取 remote_sdk_version 失败，将以未知版本预加载 SDK", e)
-	                                null
-	                            }
+                    applicationScope.launch(Dispatchers.IO) {
+                        try {
+                            val remoteSdkVersion = try {
+                                database.appConfigDao().getLatestValue("remote_sdk_version")
+                            } catch (e: Exception) {
+                                Log.w(TAG, "fallback 路径：读取 remote_sdk_version 失败，将以未知版本预加载 SDK", e)
+                                null
+                            }
                             Log.d(TAG, "fallback 路径：预加载 SDK (remoteSdkVersion=$remoteSdkVersion)")
                             sdkManager.preloadSdk(remoteSdkVersion)
                             Log.d(TAG, "fallback 路径：SDK 对比/预加载完成")
@@ -457,6 +625,7 @@ class DataManager @Inject constructor(
                 } else {
                     Log.d(TAG, "初始化路径：未从远端获取到配置（可能无网络或远端返回空），保留保底数据")
                 }
+                syncAdventureConfigIfNeeded(force = false)
             } catch (e: Exception) {
                 Log.w(TAG, "尝试从远端更新配置失败，已保留本地保底数据", e)
             }
@@ -496,6 +665,7 @@ class DataManager @Inject constructor(
             val merged = fetchGameConfigFromNetwork()
             if (merged.isNotEmpty()) {
                 Log.d(TAG, "刷新路径：远端配置获取并合并完成，共 ${merged.size} 条游戏数据")
+                syncAdventureConfigIfNeeded(force = true)
                 eventManager.emitDataEvent(DataEvent.RefreshCompleted)
             } else {
                 Log.e(TAG, "刷新路径：远端返回空或合并失败，保留本地数据")
@@ -541,14 +711,14 @@ class DataManager @Inject constructor(
             fetchSdkInfoWithAuthFallback("preloadSdkOnly")
 
             // 4) 比对远端 SDK 版本与本地缓冲版本，仅在不一致时更新 SDK
-	            try {
-	                val remoteSdkVersion = netManager.getRemoteSdkVersion()
-	                val localSdkVersion = try {
-	                    database.appConfigDao().getLatestValue("sdk_version")
-	                } catch (e: Exception) {
-	                    Log.w(TAG, "preloadSdkOnly: 读取本地 sdk_version 失败", e)
-	                    null
-	                }
+            try {
+                val remoteSdkVersion = netManager.getRemoteSdkVersion()
+                val localSdkVersion = try {
+                    database.appConfigDao().getLatestValue("sdk_version")
+                } catch (e: Exception) {
+                    Log.w(TAG, "preloadSdkOnly: 读取本地 sdk_version 失败", e)
+                    null
+                }
 
                 if (remoteSdkVersion.isNotBlank()) {
                     if (remoteSdkVersion != localSdkVersion) {
@@ -617,14 +787,14 @@ class DataManager @Inject constructor(
                 return
             }
 
-	            // 非强制：仅版本不同才更新
-	            try {
-	                val localSdkVersion = try {
-	                    database.appConfigDao().getLatestValue("sdk_version")
-	                } catch (e: Exception) {
-	                    Log.w(TAG, "preloadSdkOnly(force=false): 读取本地 sdk_version 失败", e)
-	                    null
-	                }
+            // 非强制：仅版本不同才更新
+            try {
+                val localSdkVersion = try {
+                    database.appConfigDao().getLatestValue("sdk_version")
+                } catch (e: Exception) {
+                    Log.w(TAG, "preloadSdkOnly(force=false): 读取本地 sdk_version 失败", e)
+                    null
+                }
 
                 if (remoteSdkVersion.isNotBlank()) {
                     if (remoteSdkVersion != localSdkVersion) {
@@ -810,6 +980,12 @@ class DataManager @Inject constructor(
      */
     private suspend fun applyParamsFromAssets(): Boolean = withContext(Dispatchers.IO) {
         try {
+            try {
+                reapplyPreferredEnvOverride()
+            } catch (e: Exception) {
+                Log.w(TAG, "applyParamsFromAssets: 重新应用首选环境失败", e)
+            }
+
             // 1) 检查运行时是否已有 base url（如果有，仍会执行 health 校验）
             var effectiveBase: String? = null
             try {
@@ -1113,8 +1289,8 @@ class DataManager @Inject constructor(
                     false
                 }
 
-	                if (!healthOk) {
-	                    Log.e(TAG, "fetchGameConfigFromNetwork: 远端健康检查失败，放弃拉取 gameconfig")
+                if (!healthOk) {
+                    Log.e(TAG, "fetchGameConfigFromNetwork: 远端健康检查失败，放弃拉取 gameconfig")
                     if (remoteConfigFailureShown.compareAndSet(false, true)) {
                         try {
                             withContext(Dispatchers.Main) {
@@ -1237,14 +1413,14 @@ class DataManager @Inject constructor(
                             }
 
                             // 远端 SDK 版本对比：仅当版本不同才触发 SDK 更新
-	                            try {
-	                                val remoteSdkVersion = netManager.getRemoteSdkVersion()
-	                                val localSdkVersion = try {
-	                                    database.appConfigDao().getLatestValue("sdk_version")
-	                                } catch (e: Exception) {
-	                                    Log.w(TAG, "读取本地 sdk_version 失败", e)
-	                                    null
-	                                }
+                            try {
+                                val remoteSdkVersion = netManager.getRemoteSdkVersion()
+                                val localSdkVersion = try {
+                                    database.appConfigDao().getLatestValue("sdk_version")
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "读取本地 sdk_version 失败", e)
+                                    null
+                                }
 
                                 if (!remoteSdkVersion.isNullOrBlank()) {
                                     if (remoteSdkVersion != localSdkVersion) {
@@ -1347,6 +1523,11 @@ class DataManager @Inject constructor(
                                 cacheLock.withLock {
                                     _gameConfigCache = database.gameConfigDao().getAll()
                                     lastCacheTime = System.currentTimeMillis()
+                                }
+                                try {
+                                    reapplyPreferredEnvOverride()
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "fetchGameConfigFromNetwork: 恢复首选环境失败", e)
                                 }
                                 database.gameConfigDao().getAll()
                             } catch (e: Exception) {
@@ -1511,7 +1692,9 @@ class DataManager @Inject constructor(
             }
 
             // 如果缓存未命中，尝试从数据库获取
-            val gameConfigItem = database.gameConfigDao().getGameById(gameId.toIntOrNull() ?: 0)
+            // 先按业务 gameId 字段查（最常见情况），再按整数行 id 回退
+            val gameConfigItem = database.gameConfigDao().getGameById(gameId)
+                ?: gameId.toIntOrNull()?.let { database.gameConfigDao().getGameById(it) }
 
             // 转换并返回找到的游戏数据
             return@withContext gameConfigItem?.let { configItem ->

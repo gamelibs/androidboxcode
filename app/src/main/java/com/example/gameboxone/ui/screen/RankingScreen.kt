@@ -1,5 +1,7 @@
 package com.example.gameboxone.ui.screen
 
+import java.util.Locale
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -14,14 +16,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -33,7 +33,6 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.util.*
 import javax.inject.Inject
 
 /**
@@ -578,7 +577,7 @@ fun CategoryChip(category: String) {
  */
 fun formatNumber(number: Int): String {
     return when {
-        number >= 10000 -> String.format("%.1f万", number / 10000f)
+        number >= 10000 -> String.format(Locale.getDefault(), "%.1f万", number / 10000f)
         else -> number.toString()
     }
 }

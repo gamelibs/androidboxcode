@@ -37,6 +37,7 @@ import com.example.gameboxone.ui.component.MessageDisplay
 import com.example.gameboxone.ui.navigation.NavGraphBuilders
 import com.example.gameboxone.ui.navigation.gameDetailNavGraph
 import com.example.gameboxone.ui.navigation.gamePlayerNavGraph
+import com.example.gameboxone.ui.navigation.adventureTaskDetailNavGraph
 
 private const val TAG = "MainScreen"
 
@@ -102,7 +103,7 @@ fun MainScreen(
                                     contentDescription = screen.title
                                 )
                             },
-                            label = { Text(screen.title) },
+                            label = null,
                             selected = currentRoute == screen.route,
                             onClick = { viewModel.navigateTo(screen.route) }
                         )
@@ -145,8 +146,8 @@ fun MainScreen(
                             viewModel.navigateToGameDetail(game.id.toString())
                         },
                         onProfileClick = {
-                            // Navigate to My Game tab instead of Profile screen
-                            viewModel.navigateTo(NavGraphBuilders.Routes.MY_GAME)
+                            // Navigate to Profile screen
+                            viewModel.navigateTo(NavGraphBuilders.Routes.PROFILE)
                         }
                     )
 //                    DefaultScreenContent("热门游戏", "该功能即将上线")
@@ -199,24 +200,43 @@ fun MainScreen(
                     route = NavGraphBuilders.Routes.SETTING,
                     enterTransition = {
                         fadeIn(animationSpec = tween(300)) +
-                                slideInHorizontally(
-                                    initialOffsetX = { fullWidth -> fullWidth },
-                                    animationSpec = tween(300)
-                                )
+                                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300))
                     },
                     exitTransition = {
                         fadeOut(animationSpec = tween(300)) +
-                                slideOutHorizontally(
-                                    targetOffsetX = { fullWidth -> -fullWidth },
-                                    animationSpec = tween(300)
-                                )
+                                slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300))
                     }
                 ) {
                     SettingScreen()
                 }
+
+                // 个人中心（带动画）
+                composable(
+                    route = NavGraphBuilders.Routes.PROFILE,
+                    enterTransition = {
+                        fadeIn(animationSpec = tween(300)) +
+                                slideInHorizontally(initialOffsetX = { it }, animationSpec = tween(300))
+                    },
+                    exitTransition = {
+                        fadeOut(animationSpec = tween(300)) +
+                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+                    },
+                    popExitTransition = {
+                        fadeOut(animationSpec = tween(300)) +
+                                slideOutHorizontally(targetOffsetX = { it }, animationSpec = tween(300))
+                    }
+                ) {
+                    ProfileScreen(
+                        onBackClick = { navController.popBackStack() },
+                        onSettingsClick = { viewModel.navigateTo(NavGraphBuilders.Routes.SETTING) }
+                    )
+                }
                 
                 // 游戏详情页带动画
                 gameDetailNavGraph()
+                
+                // 历练任务详情页
+                adventureTaskDetailNavGraph()
                 
                 // 游戏玩家页带动画
                 gamePlayerNavGraph()
