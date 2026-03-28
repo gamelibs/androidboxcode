@@ -44,10 +44,16 @@
         <meta-data
             android:name="com.google.android.gms.ads.INTEGRATION_MANAGER"
             android:value="webview" />
+        <meta-data
+            android:name="io.sentry.dsn"
+            android:value="@string/sentry_dsn" />
+        <meta-data
+            android:name="io.sentry.environment"
+            android:value="@string/sentry_environment" />
         <!-- 添加 WebView 渲染配置 -->
         <meta-data
             android:name="android.webkit.WebView.EnableSafeBrowsing"
-            android:value="false" />
+            android:value="true" />
         <meta-data
             android:name="android.webkit.WebView.MetricsOptOut"
             android:value="true" />

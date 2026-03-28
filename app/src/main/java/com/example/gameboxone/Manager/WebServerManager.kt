@@ -282,11 +282,20 @@ class WebServerManager @Inject constructor(
                         fun String.baseName(): String =
                             this.substringAfterLast('/').substringBeforeLast('.')
 
+                        fun String.isAndroidCpAlias(): Boolean {
+                            val normalized = baseName().lowercase()
+                            return normalized == "androidcp" || normalized == "androidmincp"
+                        }
+
                         val requestedBase = requestedName.baseName()
                         val sdkBase = sdkName.baseName()
 
                         if (sdkFile.exists() &&
-                            (requestedName == sdkName || requestedBase.equals(sdkBase, ignoreCase = true))
+                            (
+                                requestedName == sdkName ||
+                                    requestedBase.equals(sdkBase, ignoreCase = true) ||
+                                    (requestedName.isNotBlank() && requestedName.isAndroidCpAlias() && sdkName.isAndroidCpAlias())
+                                )
                         ) {
                             sdkFile
                         } else {

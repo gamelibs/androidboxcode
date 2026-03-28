@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.os.SystemClock
 import android.provider.Settings
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import androidx.appcompat.app.AlertDialog
 import com.google.android.gms.ads.AdError
 import com.google.android.gms.ads.AdRequest
@@ -75,14 +75,20 @@ object AdManager {
 
     @Volatile private var isInitialized: Boolean = false
     @Volatile private var canRequestAds: Boolean = false
+    @Volatile private var adConfigReady: Boolean = true
     // 调试：允许在未同意时加载测试广告
     @Volatile private var allowTestAdsWithoutConsent: Boolean = false
     // 全局控制：是否允许广告展示/调用（由 UI 的 Enable Ads 控制）
     @Volatile private var enableAdsGate: Boolean = true
+    @Volatile private var observabilityDelegate: AdObservabilityDelegate? = null
 
     fun setAdsEnabled(enabled: Boolean) {
         enableAdsGate = enabled
         Log.d(TAG, "Ads enabled gate set to: $enableAdsGate")
+    }
+
+    fun setObservabilityDelegate(delegate: AdObservabilityDelegate?) {
+        observabilityDelegate = delegate
     }
 
     fun isAppOpenReady(): Boolean = appOpenAd != null && isAdFresh(appOpenLoadTime)
@@ -100,6 +106,10 @@ object AdManager {
      * 现在需要在获得用户同意后才能初始化
      */
     fun initializeWithConsent(context: Context, consentManager: ConsentManager) {
+        if (!ensureAdConfigurationReady(context)) {
+            reportAdEvent("ad_error", "global", mapOf("reason" to "invalid_release_ad_config"))
+            return
+        }
         val isDebug = isDebug(context)
         val testDeviceId = if (isDebug) {
             try { computeTestDeviceHashedId(context) } catch (e: Exception) { Log.w(TAG, "computeTestDeviceHashedId failed", e); null }
@@ -116,6 +126,11 @@ object AdManager {
     }
 
     fun updateConsentState(context: Context, canRequest: Boolean) {
+        if (!ensureAdConfigurationReady(context)) {
+            this.canRequestAds = false
+            allowTestAdsWithoutConsent = false
+            return
+        }
         canRequestAds = canRequest
         val isDebug = isDebug(context)
         Log.d(TAG, "用户同意状态更新，可以请求广告: $canRequest")
@@ -187,10 +202,10 @@ object AdManager {
         val initOk = isInitialized
         val consentOk = canRequestAds
         val testOverrideOk = allowTestAdsWithoutConsent && isInitialized
-        val result = gate && initOk && (consentOk || testOverrideOk)
+        val result = gate && adConfigReady && initOk && (consentOk || testOverrideOk)
         Log.d(
             TAG,
-            "canShowAds: gate=$gate, isInitialized=$initOk, canRequestAds=$consentOk, allowTestAdsWithoutConsent=$allowTestAdsWithoutConsent, result=$result"
+            "canShowAds: gate=$gate, adConfigReady=$adConfigReady, isInitialized=$initOk, canRequestAds=$consentOk, allowTestAdsWithoutConsent=$allowTestAdsWithoutConsent, result=$result"
         )
         return result
     }
@@ -262,7 +277,7 @@ object AdManager {
                 appOpenLastError = loadAdError.message
                 Log.w(TAG, "app open failed to load: ${loadAdError.message}")
 
-                if (isDebug(context) && appOpenUnitOverride == null && loadAdError.message?.contains("Publisher data not found", true) == true) {
+                if (isDebug(context) && appOpenUnitOverride == null && loadAdError.message.contains("Publisher data not found", true)) {
                     appOpenUnitOverride = TEST_APP_OPEN_UNIT
                     Log.w(TAG, "Debug 回退到 Google 测试开屏广告位并重试加载: $TEST_APP_OPEN_UNIT")
                     loadAppOpen(context)
@@ -275,10 +290,31 @@ object AdManager {
     private fun isDebug(context: Context): Boolean =
         (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
 
+    private fun ensureAdConfigurationReady(context: Context): Boolean {
+        adConfigReady = if (isDebug(context)) {
+            true
+        } else {
+            AdConfig.hasProductionUnitsConfigured()
+        }
+        if (!adConfigReady) {
+            Log.w(TAG, "Release 广告配置未就绪，已进入 fail-close 模式")
+        }
+        return adConfigReady
+    }
+
+    private fun reportAdEvent(eventName: String, adType: String, properties: Map<String, Any?> = emptyMap()) {
+        try {
+            observabilityDelegate?.onAdEvent(eventName, adType, properties)
+        } catch (e: Exception) {
+            Log.w(TAG, "广告事件上报失败: event=$eventName, adType=$adType", e)
+        }
+    }
+
     fun showAppOpen(activity: Activity, messageId: String? = null, onClosed: (() -> Unit)? = null) {
         Log.d(TAG, "showAppOpen() called; canShowAds=${canShowAds()}, isShowing=$isShowing, appOpenAdPresent=${appOpenAd != null}, isFresh=${isAdFresh(appOpenLoadTime)}")
         if (!canShowAds()) {
             Log.d(TAG, "showAppOpen: 无法显示广告 - 广告未初始化或用户未同意")
+            reportAdEvent("ad_error", "app_open", mapOf("reason" to "not_allowed"))
             try { AdGameEventBridge.adError("appopen_not_allowed", messageId) } catch (_: Exception) {}
             // 弹出提示对话框：广告环境未就绪
             try {
@@ -300,6 +336,7 @@ object AdManager {
         }
         if (isShowing || appOpenAd == null || !isAdFresh(appOpenLoadTime)) {
             Log.d(TAG, "showAppOpen: ad not ready — calling onClosed and triggering load")
+            reportAdEvent("ad_error", "app_open", mapOf("reason" to "not_ready"))
             try { AdGameEventBridge.adError("appopen_not_ready", messageId) } catch (_: Exception) {}
             onClosed?.invoke(); loadAppOpen(activity.applicationContext); return
         }
@@ -308,6 +345,7 @@ object AdManager {
                 Log.d(TAG, "AppOpen: onAdDismissedFullScreenContent")
                 isShowing = false
                 appOpenAd = null
+                reportAdEvent("ad_complete", "app_open")
                 loadAppOpen(activity.applicationContext)
                 onClosed?.invoke()
             }
@@ -315,9 +353,10 @@ object AdManager {
                 Log.w(TAG, "AppOpen: onAdFailedToShowFullScreenContent: ${adError.message}")
                 isShowing = false
                 appOpenAd = null
+                reportAdEvent("ad_error", "app_open", mapOf("reason" to adError.message))
                 onClosed?.invoke()
                 try {
-                    AdGameEventBridge.adError(adError.message ?: "appopen_failed_to_show", messageId)
+                    AdGameEventBridge.adError(adError.message, messageId)
                 } catch (e: Exception) {
                     Log.w(TAG, "report appopen show error to bridge failed", e)
                 }
@@ -328,6 +367,7 @@ object AdManager {
                 isShowing = true
                 shownInCurrentForeground = true
                 lastShownTimestampMs = SystemClock.elapsedRealtime()
+                reportAdEvent("ad_show", "app_open")
             }
         }
         try { Log.d(TAG, "AppOpen: calling appOpenAd.show()"); appOpenAd?.show(activity) }
@@ -341,6 +381,7 @@ object AdManager {
         )
         if (!canShowAds()) {
             Log.d(TAG, "showInterstitial: 无法显示广告 - 广告未初始化或用户未同意")
+            reportAdEvent("ad_error", "interstitial", mapOf("reason" to "not_allowed"))
             try { AdGameEventBridge.adError("interstitial_not_allowed", messageId) } catch (_: Exception) {}
             // 弹出提示对话框：广告环境未就绪
             try {
@@ -365,23 +406,25 @@ object AdManager {
                 TAG,
                 "showInterstitial: ad not ready — isShowing=$isShowing, interstitial=${interstitial != null}, isFresh=${isAdFresh(interstitialLoadTime)}"
             )
+            reportAdEvent("ad_error", "interstitial", mapOf("reason" to "not_ready"))
             try { AdGameEventBridge.adError("interstitial_not_ready", messageId) } catch (_: Exception) {}
             onClosed?.invoke(false); loadInterstitial(activity.applicationContext); return
         }
         interstitial?.fullScreenContentCallback = object : FullScreenContentCallback() {
-            override fun onAdDismissedFullScreenContent() { isShowing = false; interstitial = null; loadInterstitial(activity.applicationContext); onClosed?.invoke(true) }
+            override fun onAdDismissedFullScreenContent() { isShowing = false; interstitial = null; reportAdEvent("ad_complete", "interstitial"); loadInterstitial(activity.applicationContext); onClosed?.invoke(true) }
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                 isShowing = false
                 interstitial = null
+                reportAdEvent("ad_error", "interstitial", mapOf("reason" to adError.message))
                 try {
-                    AdGameEventBridge.adError(adError.message ?: "interstitial_failed_to_show", messageId)
+                    AdGameEventBridge.adError(adError.message, messageId)
                 } catch (e: Exception) {
                     Log.w(TAG, "report interstitial show error to bridge failed", e)
                 }
                 onClosed?.invoke(false)
                 loadInterstitial(activity.applicationContext)
             }
-            override fun onAdShowedFullScreenContent() { isShowing = true; onShown?.invoke() }
+            override fun onAdShowedFullScreenContent() { isShowing = true; reportAdEvent("ad_show", "interstitial"); onShown?.invoke() }
         }
         try { interstitial?.show(activity) } catch (e: Exception) { Log.w(TAG, "showInterstitial exception", e); isShowing = false; onClosed?.invoke(false); loadInterstitial(activity.applicationContext) }
     }
@@ -415,6 +458,7 @@ object AdManager {
     fun showRewarded(activity: Activity, messageId: String? = null, onShown: (() -> Unit)? = null, onEarned: ((RewardItem) -> Unit)? = null, onClosed: ((Boolean) -> Unit)? = null) {
         if (!canShowAds()) {
             Log.d(TAG, "showRewarded: 无法显示广告 - 广告未初始化或用户未同意")
+            reportAdEvent("ad_error", "rewarded", mapOf("reason" to "not_allowed"))
             try { AdGameEventBridge.adError("rewarded_not_allowed", messageId) } catch (_: Exception) {}
             // 弹出提示对话框：广告环境未就绪
             try {
@@ -435,6 +479,7 @@ object AdManager {
             onClosed?.invoke(false); return
         }
         if (isShowing || rewardedAd == null || !isAdFresh(rewardedLoadTime)) {
+            reportAdEvent("ad_error", "rewarded", mapOf("reason" to "not_ready"))
             try { AdGameEventBridge.adError("rewarded_not_ready", messageId) } catch (_: Exception) {}
             onClosed?.invoke(false); loadRewarded(activity.applicationContext); return
         }
@@ -446,6 +491,7 @@ object AdManager {
             override fun onAdDismissedFullScreenContent() {
                 isShowing = false
                 rewardedAd = null
+                reportAdEvent("ad_complete", "rewarded", mapOf("earned" to earned))
                 loadRewarded(activity.applicationContext)
                 // Pass whether reward was earned to the onClosed callback
                 try { onClosed?.invoke(earned) } catch (e: Exception) { Log.w(TAG, "onClosed invoke failed", e) }
@@ -453,15 +499,16 @@ object AdManager {
             override fun onAdFailedToShowFullScreenContent(adError: AdError) {
                 isShowing = false
                 rewardedAd = null
+                reportAdEvent("ad_error", "rewarded", mapOf("reason" to adError.message))
                 try {
-                    AdGameEventBridge.adError(adError.message ?: "rewarded_failed_to_show", messageId)
+                    AdGameEventBridge.adError(adError.message, messageId)
                 } catch (e: Exception) {
                     Log.w(TAG, "report rewarded show error to bridge failed", e)
                 }
                 try { onClosed?.invoke(false) } catch (e: Exception) { Log.w(TAG, "onClosed invoke failed", e) }
                 loadRewarded(activity.applicationContext)
             }
-            override fun onAdShowedFullScreenContent() { isShowing = true; onShown?.invoke() }
+            override fun onAdShowedFullScreenContent() { isShowing = true; reportAdEvent("ad_show", "rewarded"); onShown?.invoke() }
         }
 
         try {
@@ -537,7 +584,7 @@ object AdManager {
 
                     // Do NOT emit ad_error for background loads; only show-path failures should notify H5
 
-                    if (isDebug(context) && bannerUnitOverride == null && loadAdError.message?.contains("Publisher data not found", true) == true) {
+                    if (isDebug(context) && bannerUnitOverride == null && loadAdError.message.contains("Publisher data not found", true)) {
                         bannerUnitOverride = TEST_BANNER_UNIT
                         Log.w(TAG, "Debug fallback to Google test banner ad unit: $TEST_BANNER_UNIT")
                         loadBanner(context)
@@ -590,6 +637,10 @@ object AdManager {
      * 在调试场景下强制使用测试广告位。可选传入 context 以便在启用时立即初始化 MobileAds 并触发加载。
      */
     fun setUseTestAds(use: Boolean, context: Context? = null) {
+        if (use && context != null && !isDebug(context)) {
+            Log.w(TAG, "release 构建禁止启用测试广告位")
+            return
+        }
         if (use) {
             interstitialUnitOverride = TEST_INTERSTITIAL_UNIT
             rewardedUnitOverride = TEST_REWARDED_UNIT
@@ -634,6 +685,10 @@ object AdManager {
      * 仅用于开发，不要用于生产。
      */
     fun initializeForDevAssumeConsent(context: Context) {
+        if (!isDebug(context)) {
+            Log.w(TAG, "release 构建禁止使用 initializeForDevAssumeConsent")
+            return
+        }
         try {
             // 使用测试广告位并允许在未同意时加载测试广告
             setUseTestAds(true, null)

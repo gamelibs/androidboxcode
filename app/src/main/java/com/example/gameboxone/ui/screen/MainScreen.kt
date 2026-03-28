@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.Icon
@@ -21,10 +19,12 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavController
@@ -33,11 +33,13 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.example.gameboxone.data.viewmodel.MainViewModel
 import com.example.gameboxone.navigation.AppNavigator
+import com.example.gameboxone.ui.component.AiWelcomeDialog
 import com.example.gameboxone.ui.component.MessageDisplay
 import com.example.gameboxone.ui.navigation.NavGraphBuilders
 import com.example.gameboxone.ui.navigation.gameDetailNavGraph
 import com.example.gameboxone.ui.navigation.gamePlayerNavGraph
 import com.example.gameboxone.ui.navigation.adventureTaskDetailNavGraph
+import kotlinx.coroutines.delay
 
 private const val TAG = "MainScreen"
 
@@ -55,6 +57,7 @@ fun MainScreen(
     val uiState by viewModel.uiState.collectAsState()
     val messages by viewModel.messages.collectAsState()
     val navController = rememberNavController()
+    var showAiWelcome by rememberSaveable { mutableStateOf(false) }
     
     // 创建导航控制器
     val appNavigator = remember { AppNavigator(navController) }
@@ -63,6 +66,11 @@ fun MainScreen(
     LaunchedEffect(appNavigator) {
         Log.d(TAG, "设置导航事件监听器")
         appNavigator.handleNavigationEvents(viewModel.navigationEvents)
+    }
+
+    LaunchedEffect(Unit) {
+        delay(420)
+        showAiWelcome = true
     }
 
     // 监听导航目的地更改
@@ -86,31 +94,7 @@ fun MainScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = MaterialTheme.colorScheme.background,
-        contentColor = MaterialTheme.colorScheme.onBackground,
-        // 底部导航栏
-        bottomBar = {
-            if (uiState.isBottomBarVisible) {
-                NavigationBar {
-                    val currentRoute = remember(uiState.currentRoute) {
-                        uiState.currentRoute
-                    }
-
-                    NavGraphBuilders.bottomNavItems.forEach { screen ->
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    imageVector = screen.icon(),
-                                    contentDescription = screen.title
-                                )
-                            },
-                            label = null,
-                            selected = currentRoute == screen.route,
-                            onClick = { viewModel.navigateTo(screen.route) }
-                        )
-                    }
-                }
-            }
-        }
+        contentColor = MaterialTheme.colorScheme.onBackground
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -145,9 +129,17 @@ fun MainScreen(
                         onGameSelected = { game ->
                             viewModel.navigateToGameDetail(game.id.toString())
                         },
-                        onProfileClick = {
-                            // Navigate to Profile screen
+                        onOpenAdventure = {
+                            viewModel.navigateTo(NavGraphBuilders.Routes.ADVENTURE)
+                        },
+                        onOpenProfile = {
                             viewModel.navigateTo(NavGraphBuilders.Routes.PROFILE)
+                        },
+                        onOpenSettings = {
+                            viewModel.navigateTo(NavGraphBuilders.Routes.SETTING)
+                        },
+                        onAiAssistantClick = {
+                            showAiWelcome = true
                         }
                     )
 //                    DefaultScreenContent("热门游戏", "该功能即将上线")
@@ -258,34 +250,16 @@ fun MainScreen(
                     viewModel.dismissMessage(message.id)
                 }
             )
+
+            AiWelcomeDialog(
+                visible = showAiWelcome,
+                onDismiss = { showAiWelcome = false },
+                onChallenge = {
+                    showAiWelcome = false
+                    viewModel.navigateTo(NavGraphBuilders.Routes.ADVENTURE)
+                }
+            )
         }
     }
 }
 
-/**
- * 默认屏幕内容
- */
-@Composable
-fun DefaultScreenContent(title: String, message: String) {
-    Box(
-        modifier = Modifier.fillMaxSize(),
-        contentAlignment = Alignment.Center
-    ) {
-        androidx.compose.foundation.layout.Column(
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.headlineMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyLarge,
-                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
-                modifier = Modifier.padding(top = 16.dp, start = 32.dp, end = 32.dp)
-            )
-        }
-    }
-}

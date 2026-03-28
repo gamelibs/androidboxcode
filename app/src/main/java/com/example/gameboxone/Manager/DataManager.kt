@@ -114,6 +114,16 @@ class DataManager @Inject constructor(
         val releaseUrl: String?
     )
 
+    private data class BundledParams(
+        val env: String?,
+        val betaUrl: String?,
+        val releaseUrl: String?,
+        val gameSdkUrl: String?,
+        val sdkVersion: String?,
+        val gameSdkName: String?,
+        val gameConfigUrl: String?
+    )
+
     private fun readPreferredEnvConfig(): PreferredEnvConfig {
         return try {
             val prefs = context.getSharedPreferences("game_preferences", Context.MODE_PRIVATE)
@@ -152,6 +162,30 @@ class DataManager @Inject constructor(
             betaUrl = preferred.betaUrl,
             resUrl = preferred.releaseUrl
         )
+    }
+
+    private fun readBundledParams(): BundledParams? {
+        return try {
+            val jsonString = context.assets.open("gameconfig.json")
+                .bufferedReader()
+                .use { it.readText() }
+            val rootObj = Gson().fromJson(jsonString, com.google.gson.JsonObject::class.java)
+            val params = rootObj?.getAsJsonObject("params") ?: return null
+            BundledParams(
+                env = params.getAsJsonPrimitive("env")?.asString,
+                betaUrl = params.getAsJsonPrimitive("betaUrl")?.asString
+                    ?: params.getAsJsonPrimitive("beta")?.asString,
+                releaseUrl = params.getAsJsonPrimitive("resUrl")?.asString
+                    ?: params.getAsJsonPrimitive("release")?.asString,
+                gameSdkUrl = params.getAsJsonPrimitive("gameSdkUrl")?.asString,
+                sdkVersion = params.getAsJsonPrimitive("sdkVersion")?.asString,
+                gameSdkName = params.getAsJsonPrimitive("gameSdkName")?.asString,
+                gameConfigUrl = params.getAsJsonPrimitive("gameConfigUrl")?.asString
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "读取 assets/gameconfig.json params 失败", e)
+            null
+        }
     }
 
     private suspend fun fetchGameListWithAuthFallback(purpose: String): Result<List<GameConfigItem>> {
@@ -858,34 +892,25 @@ class DataManager @Inject constructor(
 
             // Apply params (env/betaUrl/resUrl/gameSdkUrl/gameConfigUrl) so NetManager has correct BASE_URL and REMOTE_CONFIG_URL
             try {
-                if (rootObj.has("params") && rootObj.get("params").isJsonObject) {
-                    val params = rootObj.getAsJsonObject("params")
-                    val env = params.getAsJsonPrimitive("env")?.asString
-                    // 支持多种命名（beta / betaUrl）和（resUrl / release）以兼容不同的配置
-                    val betaUrl = params.getAsJsonPrimitive("betaUrl")?.asString
-                        ?: params.getAsJsonPrimitive("beta")?.asString
-                    val resUrl = params.getAsJsonPrimitive("resUrl")?.asString
-                        ?: params.getAsJsonPrimitive("release")?.asString
-                    val gameSdkUrl = params.getAsJsonPrimitive("gameSdkUrl")?.asString
-                    val sdkVersion = params.getAsJsonPrimitive("sdkVersion")?.asString
-                    // 支持正确或拼写错误的 gameSdkName 字段
-                    val gameSdkName = params.getAsJsonPrimitive("gameSdkName")?.asString
-                    // 新增：支持可选的 gameConfigUrl 字段，用于指定远程 gameconfig 地址
-                    val gameConfigUrl = params.getAsJsonPrimitive("gameConfigUrl")?.asString
+                readBundledParams()?.let { params ->
+                    val preferredEnv = readPreferredEnvConfig()
+                    val effectiveEnv = preferredEnv.env.ifBlank { params.env ?: "beta" }
+                    val betaUrl = preferredEnv.betaUrl ?: params.betaUrl
+                    val resUrl = preferredEnv.releaseUrl ?: params.releaseUrl
 
                     // apply to netManager
                     netManager.applyRemoteParams(
-                        env,
+                        effectiveEnv,
                         betaUrl,
                         resUrl,
-                        gameSdkUrl,
-                        sdkVersion,
-                        gameSdkName,
-                        gameConfigUrl
+                        params.gameSdkUrl,
+                        params.sdkVersion,
+                        params.gameSdkName,
+                        params.gameConfigUrl
                     )
                     Log.d(
                         TAG,
-                        "Applied remote params from fallback: env=$env, betaUrl=$betaUrl, resUrl=$resUrl, gameSdkUrl=$gameSdkUrl, sdkVersion=$sdkVersion, gameSdkName=$gameSdkName, gameConfigUrl=$gameConfigUrl"
+                        "Applied remote params from fallback: env=$effectiveEnv, betaUrl=$betaUrl, resUrl=$resUrl, gameSdkUrl=${params.gameSdkUrl}, sdkVersion=${params.sdkVersion}, gameSdkName=${params.gameSdkName}, gameConfigUrl=${params.gameConfigUrl}"
                     )
 
                     // 持久化 params 到 app_config（即使 gamelist 为空，我们也认为 params 已成功应用并需保存）
@@ -900,10 +925,10 @@ class DataManager @Inject constructor(
                     } catch (e: Exception) {
                         Log.w(TAG, "写入保底 params 到 DB 失败", e)
                     }
-                 }
-             } catch (e: Exception) {
-                 Log.w(TAG, "应用 params 失败，继续解析 gamelist", e)
-             }
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "应用 params 失败，继续解析 gamelist", e)
+            }
 
             // 必须包含 params 和 gamelist
             if (!rootObj.has("params") || !rootObj.has("gamelist")) {
@@ -939,7 +964,9 @@ class DataManager @Inject constructor(
             // 将 task 字段提取为 taskPointsJson，并规范化 gameRes（使用去空格的游戏名称）
             val configItems = parsedItems.map { item ->
                 val taskJson = item.task?.points?.let { gson.toJson(it) }
-                val normalizedGameRes = item.name.replace(" ", "")
+                val normalizedGameRes = item.gameRes.takeIf { it.isNotBlank() }
+                    ?: item.gameId.takeIf { it.isNotBlank() }
+                    ?: item.name.replace(" ", "")
                 item.copy(
                     gameRes = normalizedGameRes,
                     taskPointsJson = taskJson
@@ -984,6 +1011,33 @@ class DataManager @Inject constructor(
                 reapplyPreferredEnvOverride()
             } catch (e: Exception) {
                 Log.w(TAG, "applyParamsFromAssets: 重新应用首选环境失败", e)
+            }
+
+            val bundledParams = readBundledParams()
+            val preferred = readPreferredEnvConfig()
+            if (bundledParams != null) {
+                try {
+                    netManager.applyRemoteParams(
+                        preferred.env.ifBlank { bundledParams.env ?: "beta" },
+                        preferred.betaUrl ?: bundledParams.betaUrl,
+                        preferred.releaseUrl ?: bundledParams.releaseUrl,
+                        bundledParams.gameSdkUrl,
+                        bundledParams.sdkVersion,
+                        bundledParams.gameSdkName,
+                        bundledParams.gameConfigUrl
+                    )
+                    try {
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "base_url", value = netManager.getBaseUrl()))
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "sdk_url", value = netManager.getSdkUrl()))
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "sdk_file_name", value = netManager.getSdkFileName()))
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "remote_sdk_version", value = netManager.getRemoteSdkVersion()))
+                        database.appConfigDao().insertConfig(AppConfigItem(name = "game_config_url", value = netManager.getGameConfigUrl()))
+                    } catch (e: Exception) {
+                        Log.w(TAG, "applyParamsFromAssets: 缓存 assets params 到 DB 失败", e)
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "applyParamsFromAssets: 应用 assets params 失败，将继续尝试 DB 缓冲", e)
+                }
             }
 
             // 1) 检查运行时是否已有 base url（如果有，仍会执行 health 校验）

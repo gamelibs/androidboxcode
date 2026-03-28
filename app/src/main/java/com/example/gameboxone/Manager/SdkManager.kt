@@ -4,6 +4,8 @@ import android.content.Context
 import com.example.gameboxone.AppLog as Log
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.event.DataEvent
+import com.example.gameboxone.observability.AnalyticsEventNames
+import com.example.gameboxone.observability.AnalyticsManager
 import com.example.gameboxone.service.MessageService
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -21,6 +23,7 @@ import javax.inject.Singleton
 class SdkManager @Inject constructor(
     @ApplicationContext private val context: Context,
     private val netManager: NetManager,
+    private val analyticsManager: AnalyticsManager,
     private val messageService: MessageService,
     private val eventManager: EventManager,
     private val database: com.example.gameboxone.base.AppDatabase
@@ -55,6 +58,10 @@ class SdkManager @Inject constructor(
     suspend fun preloadSdk(remoteVersion: String? = null) {
         try {
             Log.d(TAG, "开始预加载SDK... remoteVersion=$remoteVersion")
+            analyticsManager.track(
+                AnalyticsEventNames.SDK_REFRESH_START,
+                mapOf("remote_version" to (remoteVersion ?: ""))
+            )
 
             // 如果提供了远端版本号，并且本地版本与之相同，则直接复用本地缓存，避免重复下载
             if (!remoteVersion.isNullOrBlank()) {
@@ -66,6 +73,10 @@ class SdkManager @Inject constructor(
                             Log.d(
                                 TAG,
                                 "预加载SDK: 远端版本与本地版本相同 (version=$remoteVersion)，且本地缓存可用，跳过网络下载"
+                            )
+                            analyticsManager.track(
+                                AnalyticsEventNames.SDK_REFRESH_SUCCESS,
+                                mapOf("source" to "local_cache", "remote_version" to remoteVersion)
                             )
                             eventManager.emitDataEvent(DataEvent.SdkLoaded)
                             return
@@ -89,6 +100,10 @@ class SdkManager @Inject constructor(
                     val result = fetchSdkFromNetwork(remoteVersion)
                     if (result) {
                         Log.d(TAG, "从网络加载SDK成功")
+                        analyticsManager.track(
+                            AnalyticsEventNames.SDK_REFRESH_SUCCESS,
+                            mapOf("source" to "network", "remote_version" to (remoteVersion ?: ""))
+                        )
                         eventManager.emitDataEvent(DataEvent.SdkLoaded)
                         return
                     } else {
@@ -105,6 +120,10 @@ class SdkManager @Inject constructor(
             val localFile = sdkFile
             if (localFile != null && localFile.exists() && localFile.length() > 0) {
                 Log.d(TAG, "使用本地SDK缓存: ${localFile.absolutePath}")
+                analyticsManager.track(
+                    AnalyticsEventNames.SDK_REFRESH_SUCCESS,
+                    mapOf("source" to "local_file", "remote_version" to (remoteVersion ?: ""))
+                )
                 eventManager.emitDataEvent(DataEvent.SdkLoaded)
                 return
             }
@@ -113,12 +132,24 @@ class SdkManager @Inject constructor(
             Log.d(TAG, "本地缓存不存在，尝试从 assets 加载保底 SDK（仅使用配置的文件名）")
             val fallbackOk = loadFallbackSdkFromAssets()
             if (fallbackOk) {
+                analyticsManager.track(
+                    AnalyticsEventNames.SDK_REFRESH_SUCCESS,
+                    mapOf("source" to "assets_fallback", "remote_version" to (remoteVersion ?: ""))
+                )
                 eventManager.emitDataEvent(DataEvent.SdkLoaded)
             } else {
                 Log.w(TAG, "未找到保底 SDK，跳过 SDK 加载（等待手动触发或后续更新）")
+                analyticsManager.track(
+                    AnalyticsEventNames.SDK_REFRESH_FAIL,
+                    mapOf("reason" to "no_fallback_sdk", "remote_version" to (remoteVersion ?: ""))
+                )
             }
         } catch (e: Exception) {
             Log.e(TAG, "预加载SDK失败", e)
+            analyticsManager.track(
+                AnalyticsEventNames.SDK_REFRESH_FAIL,
+                mapOf("reason" to (e.message ?: "unknown"), "remote_version" to (remoteVersion ?: ""))
+            )
             messageService.showMessage(
                 UiMessage.Error(
                     message = "SDK加载失败: ${e.message}"

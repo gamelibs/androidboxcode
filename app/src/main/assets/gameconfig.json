@@ -10,6 +10,130 @@
     "platformId": "1003"
   },
   "gamelist": [
-
+    {
+      "gameid": "G10000",
+      "name": "离线保底游戏01",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10000",
+      "info": "断网时用于保底任务的本地游戏 01。",
+      "download": "",
+      "patch": 1,
+      "size": "local",
+      "task": {
+        "desc": "启动 1 次即可完成离线保底任务",
+        "points": [1]
+      }
+    },
+    {
+      "gameid": "G10001",
+      "name": "离线保底游戏02",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10001",
+      "info": "本地保底游戏 02。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10002",
+      "name": "离线保底游戏03",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10002",
+      "info": "本地保底游戏 03。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10003",
+      "name": "离线保底游戏04",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10003",
+      "info": "本地保底游戏 04。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10004",
+      "name": "离线保底游戏05",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10004",
+      "info": "本地保底游戏 05。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10005",
+      "name": "离线保底游戏06",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10005",
+      "info": "本地保底游戏 06。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10006",
+      "name": "离线保底游戏07",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10006",
+      "info": "本地保底游戏 07。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10007",
+      "name": "离线保底游戏08",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10007",
+      "info": "本地保底游戏 08。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10008",
+      "name": "离线保底游戏09",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10008",
+      "info": "本地保底游戏 09。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10009",
+      "name": "离线保底游戏10",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10009",
+      "info": "本地保底游戏 10。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    },
+    {
+      "gameid": "G10010",
+      "name": "离线保底游戏11",
+      "icon": "",
+      "rating": 5,
+      "gameRes": "10010",
+      "info": "本地保底游戏 11。",
+      "download": "",
+      "patch": 1,
+      "size": "local"
+    }
   ]
 }

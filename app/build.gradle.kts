@@ -6,6 +6,10 @@ plugins {
     id("dagger.hilt.android.plugin")
 }
 
+val sentryDsn = (project.findProperty("SENTRY_DSN") as String?)?.trim().orEmpty()
+val sentryEnvironment = (project.findProperty("SENTRY_ENVIRONMENT") as String?)?.trim().orEmpty()
+val sentryEnabledForRelease = sentryDsn.isNotBlank()
+
 android {
     namespace = "com.example.gameboxone"
     compileSdk = 34 // 使用当前稳定版
@@ -16,10 +20,38 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildFeatures {
         compose = true
+        buildConfig = true
+    }
+
+    buildTypes {
+        debug {
+            isMinifyEnabled = false
+            buildConfigField("boolean", "ENABLE_AD_DEBUG", "true")
+            resValue("bool", "sentry_enabled", "false")
+            resValue("string", "sentry_dsn", "\"\"")
+            resValue("string", "sentry_environment", "\"debug\"")
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+            buildConfigField("boolean", "ENABLE_AD_DEBUG", "false")
+            resValue("bool", "sentry_enabled", sentryEnabledForRelease.toString())
+            resValue("string", "sentry_dsn", "\"$sentryDsn\"")
+            resValue(
+                "string",
+                "sentry_environment",
+                "\"${sentryEnvironment.ifBlank { "release" }}\""
+            )
+        }
     }
 
     compileOptions {
@@ -77,9 +109,11 @@ dependencies {
     implementation("com.google.android.gms:play-services-ads:23.1.0")
     implementation("com.google.android.ump:user-messaging-platform:2.2.0")
     implementation("androidx.lifecycle:lifecycle-process:2.8.3")
+    implementation("io.sentry:sentry-android:7.14.0")
 
     // Android 测试依赖
     testImplementation("junit:junit:4.13.2")
+    testImplementation("androidx.arch.core:core-testing:2.2.0")
     androidTestImplementation("androidx.test.ext:junit:1.1.5")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.5.1")
 }

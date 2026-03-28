@@ -10,6 +10,7 @@
 - [首页历练挑战升级体系设计文档](./docs/home-adventure-system.md)
 - [后台任务运营与接口设计文档](./docs/backend-task-system.md)
 - [前端历练化改造执行方案](./docs/frontend-adventure-refactor-plan.md)
+- [观测与发布收口说明](./docs/observability-rollout.md)
 
 ---
 

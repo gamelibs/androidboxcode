@@ -20,10 +20,12 @@ class CrashHandlerActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val crashId = intent.getStringExtra("crashId") ?: "unknown"
         val errorMessage = intent.getStringExtra("error") ?: "未知错误"
 
         setContent {
             ErrorScreen(
+                crashId = crashId,
                 errorMessage = errorMessage,
                 onRestartClick = { restartApp() }
             )
@@ -32,6 +34,7 @@ class CrashHandlerActivity : ComponentActivity() {
 
     @Composable
     private fun ErrorScreen(
+        crashId: String,
         errorMessage: String,
         onRestartClick: () -> Unit
     ) {
@@ -66,6 +69,16 @@ class CrashHandlerActivity : ComponentActivity() {
                     text = errorMessage,
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Text(
+                    text = "错误编号：$crashId",
+                    style = MaterialTheme.typography.labelMedium,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(horizontal = 16.dp)
                 )
 

@@ -43,7 +43,11 @@ import com.example.gameboxone.manager.MyGameManager
 import com.example.gameboxone.manager.WebServerManager
 import com.example.gameboxone.manager.LocalAdventureManager
 import com.example.gameboxone.event.TaskEvent
+import com.example.gameboxone.observability.AnalyticsEventNames
+import com.example.gameboxone.observability.AnalyticsManager
 import com.example.gameboxone.utils.WebSettingsUtils
+import com.example.gameboxone.utils.WebNavigationDecision
+import com.example.gameboxone.utils.WebViewUrlPolicy
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -113,6 +117,9 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     @Inject
     lateinit var localAdventureManager: LocalAdventureManager
 
+    @Inject
+    lateinit var analyticsManager: AnalyticsManager
+
     /** 任务事件处理器：将游戏 SDK 事件转换为任务进度，由 WebViewBridgeRegistrar 读取 */
     @Inject
     lateinit var gameTaskEventHandler: GameTaskEventHandler
@@ -122,6 +129,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
     // 防止同一场游戏重复弹出目标达成提示
     private var goalAchievedShown = false
     private var hasReportedGameExit = false
+    private var gameSessionStartedAtMs: Long = 0L
 
     // 添加错误处理和生命周期相关字段
     private var hasError = false
@@ -371,7 +379,7 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
         overlayTask = layoutOverlay.findViewById(R.id.overlay_task)
 
         // 统一关闭按钮行为：结束 Activity
-        val btnClose = layoutOverlay.findViewById<android.widget.ImageButton?>(R.id.btn_close_overlay)
+        val btnClose = layoutOverlay.findViewById<ImageButton?>(R.id.btn_close_overlay)
         btnClose?.setOnClickListener { finish() }
 
         // 开始/继续按钮（仅在 view_start_game 中存在）
@@ -533,8 +541,21 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             webViewClient = object : WebViewClient() {
                 // 拦截 URL 加载，使用 WebView 自己加载
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                    view.loadUrl(request.url.toString())
-                    return true
+                    return when (WebViewUrlPolicy.decide(request.url.toString(), gameUrl)) {
+                        WebNavigationDecision.ALLOW_IN_WEBVIEW -> false
+                        WebNavigationDecision.OPEN_EXTERNALLY -> {
+                            runCatching {
+                                startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                            }.onFailure {
+                                Log.w(TAG, "无法打开外部链接: ${request.url}", it)
+                            }
+                            true
+                        }
+                        WebNavigationDecision.BLOCK -> {
+                            Log.w(TAG, "拦截不安全导航: ${request.url}")
+                            true
+                        }
+                    }
                 }
 
                 // 页面开始加载（已不再显示自定义 loading 覆盖层）
@@ -797,7 +818,19 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
      * 记录游戏启动的钩子（占位），可以上报埋点/Analytics
      */
     private fun recordGameStart() {
-        // TODO: 记录游戏启动事件
+        gameId?.takeIf { it.isNotBlank() }?.let {
+            try {
+                gameSessionStartedAtMs = System.currentTimeMillis()
+                gameTaskEventHandler.onGameStart(it)
+                analyticsManager.track(
+                    AnalyticsEventNames.GAME_START,
+                    mapOf("game_id" to it)
+                )
+                Log.d(TAG, "已上报游戏启动事件: gameId=$it")
+            } catch (e: Exception) {
+                Log.w(TAG, "上报游戏启动事件失败: gameId=$it", e)
+            }
+        }
     }
 
     /**
@@ -857,10 +890,11 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
                         // 领取奖励并返回主界面
                         launch(Dispatchers.IO) {
                             try {
-                                val ok = localAdventureManager.claimTaskReward(achieved.taskId)
-                                Log.d(TAG, "claimTaskReward taskId=${achieved.taskId} ok=$ok")
-                                // 无论是否成功，都通知 HomeViewModel 刷新
-                                eventManager.emitTaskEvent(TaskEvent.TaskClaimed(achieved.taskId))
+                                val result = localAdventureManager.claimTaskReward(achieved.taskId)
+                                Log.d(TAG, "claimTaskReward taskId=${achieved.taskId} ok=${result.success}")
+                                if (result.success) {
+                                    eventManager.emitTaskEvent(TaskEvent.TaskClaimed(achieved.taskId))
+                                }
                             } catch (e: Exception) {
                                 Log.e(TAG, "claimTaskReward 失败", e)
                             } finally {
@@ -902,6 +936,19 @@ class WebViewActivity : AppCompatActivity(), CoroutineScope by MainScope() {
             gameId?.takeIf { it.isNotBlank() }?.let {
                 try {
                     gameTaskEventHandler.onGameExit(it)
+                    val playDurationSeconds = if (gameSessionStartedAtMs > 0L) {
+                        ((System.currentTimeMillis() - gameSessionStartedAtMs).coerceAtLeast(0L)) / 1000L
+                    } else {
+                        0L
+                    }
+                    analyticsManager.track(
+                        AnalyticsEventNames.GAME_EXIT,
+                        mapOf("game_id" to it, "duration_seconds" to playDurationSeconds)
+                    )
+                    analyticsManager.track(
+                        AnalyticsEventNames.GAME_PLAY_TIME,
+                        mapOf("game_id" to it, "duration_seconds" to playDurationSeconds)
+                    )
                     hasReportedGameExit = true
                 } catch (e: Exception) {
                     Log.w(TAG, "onDestroy: 上报退出事件失败", e)

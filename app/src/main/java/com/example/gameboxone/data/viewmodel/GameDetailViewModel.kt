@@ -16,6 +16,8 @@ import com.example.gameboxone.data.state.GameResourceState
 import com.example.gameboxone.event.GameEvent
 import com.example.gameboxone.manager.MyGameManager
 import com.example.gameboxone.navigation.NavigationEvent
+import com.example.gameboxone.observability.AnalyticsEventNames
+import com.example.gameboxone.observability.AnalyticsManager
 import com.example.gameboxone.service.MessageService
 import com.example.gameboxone.ui.navigation.NavGraphBuilders
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,6 +42,7 @@ class GameDetailViewModel @Inject constructor(
     private val messageService: MessageService,
     private val myGameManager: MyGameManager,
     private val localAdventureManager: LocalAdventureManager,
+    private val analyticsManager: AnalyticsManager,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
 ) : GameViewModel(eventManager) {
@@ -105,6 +108,14 @@ class GameDetailViewModel @Inject constructor(
                         isLoading = false,
                         error = null,
                         hasUpdate = hasUpdate
+                    )
+                    analyticsManager.track(
+                        AnalyticsEventNames.GAME_DETAIL_VIEW,
+                        mapOf(
+                            "game_id" to (gameData.gameId ?: gameData.id),
+                            "has_adventure_task" to (adventureTask != null),
+                            "is_local" to gameData.isLocal
+                        )
                     )
                     Log.d(TAG, "游戏详情加载成功: ${gameData.name}, 历练任务: ${adventureTask?.taskTitle ?: "无"}, hasUpdate=$hasUpdate")
 
@@ -233,6 +244,13 @@ class GameDetailViewModel @Inject constructor(
 
                 setLoading(true)
                 Log.d(TAG, "准备启动游戏: ${game.name}, 正在检查资源...")
+                analyticsManager.track(
+                    AnalyticsEventNames.GAME_LAUNCH_CLICK,
+                    mapOf(
+                        "game_id" to (game.gameId ?: game.id),
+                        "source" to "game_detail"
+                    )
+                )
 
                 // 使用 ResourceManager 统一检查资源状态
                 when (val resourceState = resourceManager.ensureGameResourceAvailable(game)) {

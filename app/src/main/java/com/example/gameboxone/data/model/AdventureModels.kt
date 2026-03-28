@@ -46,6 +46,36 @@ data class AdventureTaskUiModel(
     val isRecommended: Boolean
 )
 
+data class AdventureRewardGrant(
+    val rewardPackageId: String? = null,
+    val exp: Long = 0L,
+    val coins: Long = 0L,
+    val popupText: String? = null,
+    val titleReward: String? = null,
+    val badgeReward: String? = null,
+    val frameReward: String? = null
+)
+
+data class AdventureTaskClaimResult(
+    val success: Boolean = false,
+    val taskId: String = "",
+    val reward: AdventureRewardGrant = AdventureRewardGrant(),
+    val newTotalExp: Long = 0L,
+    val newTotalCoins: Long = 0L,
+    val displayMessage: String = ""
+)
+
+data class AdventureLevelUpResult(
+    val success: Boolean = false,
+    val fromLevel: Int = 0,
+    val toLevel: Int = 0,
+    val newChapterId: String = "",
+    val newChapterTitle: String = "",
+    val chapterReward: AdventureRewardGrant? = null,
+    val levelReward: AdventureRewardGrant? = null,
+    val displayMessage: String = ""
+)
+
 data class AdventureHomeUiState(
     val isInitialized: Boolean = false,
     val localPlayerName: String = "本地旅人",
@@ -59,6 +89,10 @@ data class AdventureHomeUiState(
     val completedTaskCount: Int = 0,
     val achievedTaskCount: Int = 0,
     val requiredTaskCount: Int = 7,
+    val completedClearTaskCount: Int = 0,
+    val requiredClearTaskCount: Int = 0,
+    val completedEliteTaskCount: Int = 0,
+    val requiredEliteTaskCount: Int = 0,
     val upgradeReady: Boolean = false,
     val recommendedTasks: List<AdventureTaskUiModel> = emptyList(),
     val chapterTasks: List<AdventureTaskUiModel> = emptyList(),

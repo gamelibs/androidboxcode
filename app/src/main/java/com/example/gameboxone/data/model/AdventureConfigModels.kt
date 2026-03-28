@@ -80,6 +80,13 @@ data class AdventureHomeRecommendSpec(
     @SerializedName("fallbackTaskIds") val fallbackTaskIds: List<String> = emptyList()
 )
 
+/** 离线章节覆盖配置（用于 assets/offline_adventure_override.json） */
+data class OfflineAdventureOverrideConfig(
+    @SerializedName("version") val version: String = "1.0.0",
+    @SerializedName("enabledWhenOfflineOnly") val enabledWhenOfflineOnly: Boolean = true,
+    @SerializedName("chapters") val chapters: List<AdventureChapterSpec> = emptyList()
+)
+
 /**
  * 后端版本检查接口响应模型
  * GET /api/v1/site/adventure/version

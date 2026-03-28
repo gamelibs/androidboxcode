@@ -18,6 +18,8 @@ import com.example.gameboxone.manager.LocalAdventureManager
 import com.example.gameboxone.manager.MyGameManager
 import com.example.gameboxone.manager.ResourceManager
 import com.example.gameboxone.navigation.NavigationEvent
+import com.example.gameboxone.observability.AnalyticsEventNames
+import com.example.gameboxone.observability.AnalyticsManager
 import com.example.gameboxone.service.MessageService
 import com.example.gameboxone.base.UiMessage
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -36,6 +38,7 @@ class AdventureTaskDetailViewModel @Inject constructor(
     private val resourceManager: ResourceManager,
     private val myGameManager: MyGameManager,
     eventManager: EventManager,
+    private val analyticsManager: AnalyticsManager,
     private val messageService: MessageService,
     @ApplicationContext private val context: Context,
     savedStateHandle: SavedStateHandle
@@ -107,6 +110,15 @@ class AdventureTaskDetailViewModel @Inject constructor(
                     gameId = def.gameId,
                     game = game
                 )
+                analyticsManager.track(
+                    AnalyticsEventNames.TASK_DETAIL_VIEW,
+                    mapOf(
+                        "task_id" to def.taskId,
+                        "game_id" to def.gameId,
+                        "task_type" to taskType.name,
+                        "status" to status.name
+                    )
+                )
 
                 Log.d(TAG, "任务详情加载完成: taskId=$taskId, game=${game?.name}, stages=${stages.size}")
             } catch (e: Exception) {
@@ -135,6 +147,14 @@ class AdventureTaskDetailViewModel @Inject constructor(
                 }
 
                 setLoading(true)
+                analyticsManager.track(
+                    AnalyticsEventNames.GAME_LAUNCH_CLICK,
+                    mapOf(
+                        "task_id" to taskId,
+                        "game_id" to (game.gameId ?: game.id),
+                        "source" to "adventure_task"
+                    )
+                )
                 when (val res = resourceManager.ensureGameResourceAvailable(game)) {
                     is GameResourceState.Available -> {
                         Log.d(TAG, "直接启动: ${game.name}, path=${res.localPath}")
@@ -193,6 +213,10 @@ class AdventureTaskDetailViewModel @Inject constructor(
             val dlInfo = _state.value.downloadInfo ?: return@launch
             setState { copy(showDownloadDialog = false, isDownloading = true, downloadProgress = 0f, loadingMessage = "正在下载…") }
             emitGameEvent(GameEvent.GameDownloadStarted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
+            analyticsManager.track(
+                AnalyticsEventNames.GAME_DOWNLOAD_START,
+                mapOf("game_id" to (game.gameId ?: game.id), "source" to "adventure_task")
+            )
             val myGame = Custom.MyGameData(
                 id = game.id, gameId = game.gameId, name = game.name, iconUrl = game.iconUrl,
                 gameRes = game.gameRes, rating = game.rating, patch = game.patch,
@@ -205,10 +229,22 @@ class AdventureTaskDetailViewModel @Inject constructor(
                 .fold(
                     onSuccess = { path ->
                         emitGameEvent(GameEvent.GameDownloadCompleted(Custom.ToBaseData(game.id, game.name, game.iconUrl)))
+                        analyticsManager.track(
+                            AnalyticsEventNames.GAME_DOWNLOAD_SUCCESS,
+                            mapOf("game_id" to (game.gameId ?: game.id), "source" to "adventure_task")
+                        )
                         WebViewActivity.start(context, path, game.gameId ?: game.id)
                         setState { copy(isDownloading = false, downloadProgress = 0f, loadingMessage = null) }
                     },
                     onFailure = { e ->
+                        analyticsManager.track(
+                            AnalyticsEventNames.GAME_DOWNLOAD_FAIL,
+                            mapOf(
+                                "game_id" to (game.gameId ?: game.id),
+                                "source" to "adventure_task",
+                                "message" to (e.message ?: "unknown")
+                            )
+                        )
                         handleError("下载失败: ${e.message}")
                         setState { copy(isDownloading = false, downloadProgress = 0f, loadingMessage = null) }
                     }

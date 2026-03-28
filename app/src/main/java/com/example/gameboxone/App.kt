@@ -2,12 +2,18 @@ package com.example.gameboxone
 
 import android.app.Application
 import android.content.Intent
+import android.os.Build
 import com.example.gameboxone.AppLog as Log
 import android.widget.Toast
+import com.example.gameboxone.ads.AdManager
 import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.SdkManager
 import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.manager.UserManager
+import com.example.gameboxone.observability.AnalyticsManager
+import com.example.gameboxone.observability.CrashReporter
+import com.example.gameboxone.observability.SentryObservabilityConfig
+import com.example.gameboxone.observability.SentryBridge
 import com.example.gameboxone.ui.CrashHandlerActivity
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
@@ -51,6 +57,12 @@ class App : Application(){
     @Inject
     lateinit var userManager: UserManager
 
+    @Inject
+    lateinit var analyticsManager: AnalyticsManager
+
+    @Inject
+    lateinit var crashReporter: CrashReporter
+
     companion object {
         private const val TAG = "App"
         // 全局单例引用（方便在代码其他地方快速获取 Application 实例）。
@@ -86,6 +98,10 @@ class App : Application(){
             // 设置全局异常处理器，捕获未捕获异常以便上报/展示崩溃 UI
             setupUncaughtExceptionHandler()
             Log.d(TAG, "🔥 游戏盒子应用初始化开始...")
+            initializeSentryIfConfigured()
+            analyticsManager.markAppLaunch()
+            analyticsManager.startObserving(eventManager)
+            AdManager.setObservabilityDelegate(analyticsManager)
 
             // 预加载应用数据（异步）
             preloadAppData()
@@ -128,6 +144,40 @@ class App : Application(){
          }
      }
 
+    private fun initializeSentryIfConfigured() {
+        val config = SentryObservabilityConfig.fromValues(
+            enabled = resources.getBoolean(R.bool.sentry_enabled),
+            dsn = getString(R.string.sentry_dsn),
+            environment = getString(R.string.sentry_environment),
+            releaseName = buildReleaseName()
+        )
+        if (!config.isConfigured) {
+            Log.d(TAG, "Sentry 未配置，继续使用本地观测实现")
+            return
+        }
+
+        if (SentryBridge.initialize(this)) {
+            Log.d(TAG, "Sentry 初始化完成，environment=${config.environment}")
+        } else {
+            Log.w(TAG, "Sentry 初始化失败，继续使用本地观测")
+        }
+    }
+
+    private fun buildReleaseName(): String {
+        val versionName = try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                packageManager.getPackageInfo(packageName, android.content.pm.PackageManager.PackageInfoFlags.of(0)).versionName
+            } else {
+                @Suppress("DEPRECATION")
+                packageManager.getPackageInfo(packageName, 0).versionName
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "读取版本号失败，回退到默认值", e)
+            "dev"
+        }
+        return "$packageName@${versionName.orEmpty().ifBlank { "dev" }}"
+    }
+
     /**
      * 设置应用的默认未捕获异常处理器
      * - 该 handler 会拦截主线程和后台线程上未被捕获的 Throwable
@@ -139,7 +189,12 @@ class App : Application(){
     private fun setupUncaughtExceptionHandler() {
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
             Log.e(TAG, "未捕获异常 in thread: ${thread.name}", throwable)
-            handleFatalError(throwable)
+            val crash = crashReporter.reportFatal(
+                threadName = thread.name,
+                throwable = throwable,
+                attributes = mapOf("source" to "uncaught_exception_handler")
+            )
+            handleFatalError(crash.crashId, throwable)
         }
     }
 
@@ -165,10 +220,11 @@ class App : Application(){
      *
      * 注意：在某些致命崩溃场景（例如 JNI 崩溃、严重内存错误）中，进程可能立刻终止，无法成功展示 CrashActivity。
      */
-    private fun handleFatalError(error: Throwable) {
+    private fun handleFatalError(crashId: String, error: Throwable) {
         // 处理致命错误
         startActivity(Intent(this, CrashHandlerActivity::class.java).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            putExtra("crashId", crashId)
             putExtra("error", error.toString())
         })
     }

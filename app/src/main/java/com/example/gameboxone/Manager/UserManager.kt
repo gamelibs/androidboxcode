@@ -13,6 +13,9 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import com.example.gameboxone.data.model.PlayerLoginResponse
 import com.example.gameboxone.data.model.PlayerMeResponse
+import com.example.gameboxone.observability.AnalyticsEventNames
+import com.example.gameboxone.observability.AnalyticsManager
+import com.example.gameboxone.observability.SentryCrashReporter
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 
@@ -25,7 +28,9 @@ import kotlinx.coroutines.flow.SharedFlow
 @Singleton
 class UserManager @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val netManager: NetManager
+    private val netManager: NetManager,
+    private val analyticsManager: AnalyticsManager,
+    private val sentryCrashReporter: SentryCrashReporter
 ) {
 
     companion object {
@@ -164,10 +169,24 @@ class UserManager @Inject constructor(
             )
             _profile.value = updated
             _authState.value = AuthState.LOGGED_IN
+            sentryCrashReporter.setUser(resp.id, resp.nickname)
             Log.d(TAG, "玩家登录成功: playerId=${resp.id}, nickname=${resp.nickname}, level=${resp.level}, coins=${resp.coins}, deviceId=$deviceId")
+            analyticsManager.track(
+                AnalyticsEventNames.PLAYER_LOGIN_SUCCESS,
+                mapOf(
+                    "player_id" to resp.id,
+                    "level" to resp.level,
+                    "coins" to resp.coins,
+                    "mode" to "login"
+                )
+            )
             updated
         }.onFailure {
             _authState.value = AuthState.ERROR
+            analyticsManager.track(
+                AnalyticsEventNames.PLAYER_LOGIN_FAILED,
+                mapOf("mode" to "login", "message" to (it.message ?: "unknown"))
+            )
         }
     }
 
@@ -196,6 +215,16 @@ class UserManager @Inject constructor(
             onSuccess = { me ->
                 applyMe(me, token)
                 _authState.value = AuthState.LOGGED_IN
+                sentryCrashReporter.setUser(me.id, me.nickname)
+                analyticsManager.track(
+                    AnalyticsEventNames.PLAYER_LOGIN_SUCCESS,
+                    mapOf(
+                        "player_id" to me.id,
+                        "level" to me.level,
+                        "coins" to me.coins,
+                        "mode" to "refresh"
+                    )
+                )
                 Result.success(_profile.value)
             },
             onFailure = { e ->
@@ -211,6 +240,14 @@ class UserManager @Inject constructor(
                 } else {
                     _authState.value = AuthState.ERROR
                 }
+                analyticsManager.track(
+                    AnalyticsEventNames.PLAYER_LOGIN_FAILED,
+                    mapOf(
+                        "mode" to "refresh",
+                        "message" to (e.message ?: "unknown"),
+                        "is_401" to is401
+                    )
+                )
                 Result.failure(e)
             }
         )
@@ -241,6 +278,7 @@ class UserManager @Inject constructor(
             tokenExpiresAt = null
         )
         _authState.value = AuthState.GUEST
+        sentryCrashReporter.setUser(null, null)
     }
 
     private fun ensureDeviceId(): String {

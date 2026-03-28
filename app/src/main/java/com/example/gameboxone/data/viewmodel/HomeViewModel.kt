@@ -8,6 +8,8 @@ import com.example.gameboxone.manager.DataManager
 import com.example.gameboxone.manager.EventManager
 import com.example.gameboxone.manager.IconCacheManager
 import com.example.gameboxone.manager.LocalAdventureManager
+import com.example.gameboxone.observability.AnalyticsEventNames
+import com.example.gameboxone.observability.AnalyticsManager
 import com.example.gameboxone.base.UiMessage
 import com.example.gameboxone.event.DataEvent
 import com.example.gameboxone.event.TaskEvent
@@ -29,6 +31,7 @@ class HomeViewModel @Inject constructor(
     val iconCacheManager: IconCacheManager,
     private val dataManager: DataManager,
     private val localAdventureManager: LocalAdventureManager,
+    private val analyticsManager: AnalyticsManager,
     private val messageService: MessageService,
     private val eventManager: EventManager
 ) : ViewModel() {
@@ -109,6 +112,7 @@ class HomeViewModel @Inject constructor(
                 adventureHome = adventureHome,
                 error = null
             )
+            trackHomeView(adventureHome)
             // 刷新章节地图
             _chapterMap.value = localAdventureManager.loadChapterMap()
         } catch (e: Exception) {
@@ -136,6 +140,7 @@ class HomeViewModel @Inject constructor(
                     adventureHome = adventureHome,
                     error = null
                 )
+                trackHomeView(adventureHome)
 
                 Log.d(TAG, "游戏数据加载完成，共 ${games.size} 个游戏")
 
@@ -176,6 +181,7 @@ class HomeViewModel @Inject constructor(
                     adventureHome = adventureHome,
                     error = null
                 )
+                trackHomeView(adventureHome)
                 
                 Log.d(TAG, "游戏数据同步完成，共 ${games.size} 个游戏")
                 
@@ -202,10 +208,17 @@ class HomeViewModel @Inject constructor(
     /** 领取任务奖励，完成后刷新首页状态 */
     fun claimReward(taskId: String) {
         viewModelScope.launch {
-            val ok = localAdventureManager.claimTaskReward(taskId)
-            if (ok) {
+            val result = localAdventureManager.claimTaskReward(taskId)
+            if (result.success) {
                 loadGameData()
-                messageService.showMessage(UiMessage.Success(message = "奖励领取成功！"))
+                messageService.showMessage(
+                    UiMessage.Dialog(
+                        title = "奖励到账",
+                        message = result.displayMessage.ifBlank { "奖励领取成功！" }
+                    )
+                )
+            } else {
+                messageService.showMessage(UiMessage.Error(message = "奖励领取失败，请稍后重试"))
             }
         }
     }
@@ -226,10 +239,15 @@ class HomeViewModel @Inject constructor(
     /** 执行升级操作，成功后刷新首页状态 */
     fun doLevelUp() {
         viewModelScope.launch {
-            val ok = localAdventureManager.tryLevelUp()
-            if (ok) {
+            val result = localAdventureManager.tryLevelUp()
+            if (result.success) {
                 loadGameData()
-                messageService.showMessage(UiMessage.Success(message = "🎊 恭喜晋级！解锁了下一章新挑战！"))
+                messageService.showMessage(
+                    UiMessage.Dialog(
+                        title = "晋级成功",
+                        message = result.displayMessage.ifBlank { "🎊 恭喜晋级！解锁了下一章新挑战！" }
+                    )
+                )
             } else {
                 messageService.showMessage(UiMessage.Error(message = "升级条件未满足，还需完成更多挑战"))
             }
@@ -278,4 +296,16 @@ class HomeViewModel @Inject constructor(
                 .onFailure { Log.w(TAG, "同步远端历练配置失败，继续使用本地配置", it) }
             localAdventureManager.loadHomeUiState(games)
         }
+
+    private fun trackHomeView(adventureHome: com.example.gameboxone.data.model.AdventureHomeUiState) {
+        analyticsManager.track(
+            AnalyticsEventNames.HOME_VIEW,
+            mapOf(
+                "level" to adventureHome.currentLevel,
+                "chapter_id" to adventureHome.currentChapterId,
+                "task_count" to adventureHome.totalTaskCount,
+                "upgrade_ready" to adventureHome.upgradeReady
+            )
+        )
+    }
 }

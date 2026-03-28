@@ -7,6 +7,9 @@ import com.google.android.gms.ads.AdRequest
  * Change values here or at runtime before calling AdManager.init when switching to production.
  */
 object AdConfig {
+    private const val GOOGLE_TEST_APP_ID = "ca-app-pub-3940256099942544~3347511713"
+    private const val GOOGLE_TEST_AD_PREFIX = "ca-app-pub-3940256099942544/"
+
     // Use provided AdMob App ID for Dragon Egg
     var ADMOB_APP_ID: String = "ca-app-pub-1939303734521252~3944883708"
 
@@ -28,5 +31,18 @@ object AdConfig {
         BANNER_AD_UNIT = banner
         APP_OPEN_AD_UNIT = appOpen
         TEST_DEVICE_IDS = testDeviceIds
+    }
+
+    fun isGoogleTestAppId(appId: String = ADMOB_APP_ID): Boolean =
+        appId.trim() == GOOGLE_TEST_APP_ID
+
+    fun isGoogleTestUnit(unitId: String): Boolean =
+        unitId.trim().startsWith(GOOGLE_TEST_AD_PREFIX)
+
+    fun hasProductionUnitsConfigured(): Boolean {
+        val units = listOf(INTERSTITIAL_AD_UNIT, REWARDED_AD_UNIT, BANNER_AD_UNIT, APP_OPEN_AD_UNIT)
+        return ADMOB_APP_ID.isNotBlank() &&
+            !isGoogleTestAppId() &&
+            units.all { it.isNotBlank() && !isGoogleTestUnit(it) }
     }
 }

@@ -36,6 +36,8 @@ import com.example.gameboxone.ads.AdHostActivity
 import com.example.gameboxone.ads.AdManager
 import com.example.gameboxone.ads.ConsentManager
 import com.example.gameboxone.legal.LegalConfig
+import com.example.gameboxone.observability.AnalyticsEventNames
+import com.example.gameboxone.observability.AnalyticsManager
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -43,6 +45,9 @@ import javax.inject.Inject
 class MainActivity : ComponentActivity() {
     @Inject
     lateinit var consentManager: ConsentManager
+
+    @Inject
+    lateinit var analyticsManager: AnalyticsManager
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -81,6 +86,10 @@ class MainActivity : ComponentActivity() {
                             LaunchConsentScreen(
                                 onAccepted = {
                                     LegalConfig.markAcceptedRequiredAgreements(this@MainActivity)
+                                    analyticsManager.track(
+                                        AnalyticsEventNames.LEGAL_ACCEPTED,
+                                        mapOf("source" to "launch_consent")
+                                    )
                                     hasAcceptedLegal = true
                                     initializeAdsIfEligible()
                                 },

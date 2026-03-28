@@ -2,12 +2,11 @@ package com.example.gameboxone.ads
 
 import android.app.Activity
 import android.content.Context
-import android.util.Log
+import com.example.gameboxone.AppLog as Log
 import com.google.android.ump.ConsentDebugSettings
 import com.google.android.ump.ConsentForm
 import com.google.android.ump.ConsentInformation
 import com.google.android.ump.ConsentRequestParameters
-import com.google.android.ump.FormError
 import com.google.android.ump.UserMessagingPlatform
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -29,8 +28,9 @@ class ConsentManager @Inject constructor() {
         testDeviceHashedId: String? = null,
         onConsentGathered: (canRequestAds: Boolean) -> Unit
     ) {
+        val effectiveDebug = isDebug
         // 构建调试设置（仅在测试时使用）
-        val debugSettings = if (isDebug && testDeviceHashedId != null) {
+        val debugSettings = if (effectiveDebug && testDeviceHashedId != null) {
             ConsentDebugSettings.Builder(context)
                 .setDebugGeography(ConsentDebugSettings.DebugGeography.DEBUG_GEOGRAPHY_EEA)
                 .addTestDeviceHashedId(testDeviceHashedId)
