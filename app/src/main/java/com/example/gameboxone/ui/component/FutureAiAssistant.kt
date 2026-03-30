@@ -1,10 +1,15 @@
 package com.example.gameboxone.ui.component
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -14,6 +19,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -27,7 +33,12 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -36,7 +47,6 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.Dialog
 import com.example.gameboxone.ui.theme.AdventureRealmBackgroundMid
 import com.example.gameboxone.ui.theme.AdventureRealmGlassBottom
 import com.example.gameboxone.ui.theme.AdventureRealmGlassTop
@@ -68,6 +78,24 @@ fun AiAssistantFab(
             repeatMode = RepeatMode.Reverse
         ),
         label = "ai_fab_scale"
+    )
+    // 左右交替：左亮(白)右暗 → 左暗右亮(白)，两眼都是白色
+    var leftIsActive by remember { mutableStateOf(true) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(1000)
+            leftIsActive = !leftIsActive
+        }
+    }
+    val leftEyeAlpha by animateFloatAsState(
+        targetValue = if (leftIsActive) 1f else 0.1f,
+        animationSpec = tween(durationMillis = 150, easing = LinearEasing),
+        label = "ai_left_eye"
+    )
+    val rightEyeAlpha by animateFloatAsState(
+        targetValue = if (leftIsActive) 0.1f else 1f,
+        animationSpec = tween(durationMillis = 150, easing = LinearEasing),
+        label = "ai_right_eye"
     )
 
     Box(
@@ -108,13 +136,13 @@ fun AiAssistantFab(
                     modifier = Modifier
                         .size((size * 0.17f).coerceAtLeast(10.dp))
                         .clip(CircleShape)
-                        .background(Color.White)
+                        .background(Color.White.copy(alpha = leftEyeAlpha))
                 )
                 Box(
                     modifier = Modifier
                         .size((size * 0.13f).coerceAtLeast(8.dp))
                         .clip(CircleShape)
-                        .background(AdventureRewardGold)
+                        .background(Color.White.copy(alpha = rightEyeAlpha))
                 )
             }
         }
@@ -127,11 +155,23 @@ fun AiWelcomeDialog(
     onDismiss: () -> Unit,
     onChallenge: () -> Unit
 ) {
-    if (!visible) return
-
-    Dialog(onDismissRequest = onDismiss) {
+    // 使用 AnimatedVisibility + Box 遮罩替代 Dialog，避免创建新 Window 导致界面上下偏移
+    AnimatedVisibility(
+        visible = visible,
+        enter = fadeIn(animationSpec = tween(200)),
+        exit = fadeOut(animationSpec = tween(200))
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.54f))
+                .clickable(onClick = onDismiss),
+            contentAlignment = Alignment.Center
+        ) {
         Surface(
-            modifier = Modifier.fillMaxWidth(),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp),
             shape = RoundedCornerShape(28.dp),
             color = Color.Transparent,
             tonalElevation = 0.dp,
@@ -237,6 +277,7 @@ fun AiWelcomeDialog(
                     }
                 }
             }
+        }
         }
     }
 }

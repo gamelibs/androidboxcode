@@ -315,17 +315,13 @@ private fun FutureRealmHero(
             .padding(horizontal = 18.dp, vertical = 18.dp)
     ) {
         val isCompact = maxWidth < 380.dp
-        val heroVisualHeight = if (isCompact) 430.dp else 510.dp
-        val stageHeight = if (isCompact) 328.dp else 400.dp
-        val stageWidthFraction = if (isCompact) 0.76f else 0.84f
-        val actionNodeWidth = if (isCompact) 104.dp else 128.dp
-        val actionNodeHeight = if (isCompact) 96.dp else 118.dp
-        val centerNodeOffset = if (isCompact) (-8).dp else (-24).dp
+        val heroVisualHeight = if (isCompact) 560.dp else 640.dp
+        val actionNodeWidth = if (isCompact) 90.dp else 108.dp
+        val actionNodeHeight = if (isCompact) 82.dp else 98.dp
         val bottomNodeHorizontalPadding = if (isCompact) 2.dp else 12.dp
-        val bottomNodeBottomPadding = if (isCompact) 56.dp else 18.dp
+        // 塔底占 heroVisualHeight 的76%，下方留 24% 空间用于按鈕 + 间距
+        val bottomNodeBottomPadding = (heroVisualHeight * 0.24f - actionNodeHeight - 12.dp).coerceAtLeast(8.dp)
         val metricSpacing = if (isCompact) 8.dp else 12.dp
-        val headlineSize = if (isCompact) 28.sp else 34.sp
-        val statusBadgeTopPadding = if (isCompact) 96.dp else 128.dp
 
         Column(verticalArrangement = Arrangement.spacedBy(18.dp)) {
             Row(
@@ -363,11 +359,6 @@ private fun FutureRealmHero(
                         onClick = onOpenProfile
                     )
                     RealmTopIconButton(
-                        icon = Icons.Default.Settings,
-                        contentDescription = "设置",
-                        onClick = onOpenSettings
-                    )
-                    RealmTopIconButton(
                         icon = Icons.Default.NotificationsNone,
                         contentDescription = "通知",
                         onClick = onOpenAdventure
@@ -379,64 +370,24 @@ private fun FutureRealmHero(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(metricSpacing)
             ) {
+                val idSuffix = adventure.localPlayerName.takeLast(4).uppercase()
                 RealmMetricTile(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).height(72.dp),
                     label = "Power",
                     value = mentalPower.toString(),
-                    caption = "Player ${adventure.localPlayerName.take(8)}"
+                    caption = "#$idSuffix"
                 )
                 RealmMetricTile(
-                    modifier = Modifier.weight(1f),
-                    label = "Rank",
-                    value = rankLabel,
-                    caption = adventure.currentTitle
+                    modifier = Modifier.weight(1f).height(72.dp),
+                    label = "段位",
+                    value = adventure.currentTitle,
+                    caption = rankLabel
                 )
                 RealmMetricTile(
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.weight(1f).height(72.dp),
                     label = "Coins",
                     value = adventure.totalCoins.toString(),
                     caption = "EXP ${adventure.totalExp}"
-                )
-            }
-
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Surface(
-                    color = Color.White.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(999.dp),
-                    border = BorderStroke(1.dp, AdventureRealmLine.copy(alpha = 0.42f))
-                ) {
-                    Text(
-                        text = AdventureThemeNameCn,
-                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp),
-                        color = AdventureRealmGlowStrong,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-                Spacer(modifier = Modifier.height(10.dp))
-                Text(
-                    text = AdventureThemeNameEn,
-                    color = AdventureRealmGlow,
-                    fontWeight = FontWeight.ExtraBold,
-                    fontSize = headlineSize,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(6.dp))
-                Text(
-                    text = adventure.currentChapterTitle,
-                    color = AdventureRealmTextSecondary,
-                    style = MaterialTheme.typography.titleMedium,
-                    textAlign = TextAlign.Center
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = AdventureThemeHomeSubline,
-                    color = AdventureRealmTextPrimary,
-                    style = MaterialTheme.typography.bodyMedium,
-                    textAlign = TextAlign.Center
                 )
             }
 
@@ -448,17 +399,15 @@ private fun FutureRealmHero(
                 HologramStage(
                     modifier = Modifier
                         .align(Alignment.Center)
-                        .fillMaxWidth(stageWidthFraction)
-                        .height(stageHeight),
+                        .fillMaxSize(),
                     adventure = adventure,
                     progress = completedRatio
                 )
 
                 OrbitActionNode(
                     modifier = Modifier
-                        .align(Alignment.CenterStart)
-                        .padding(start = 4.dp)
-                        .offset(y = centerNodeOffset),
+                        .align(Alignment.TopStart)
+                        .padding(start = 4.dp, top = 8.dp),
                     width = actionNodeWidth,
                     height = actionNodeHeight,
                     title = "推荐挑战",
@@ -469,9 +418,8 @@ private fun FutureRealmHero(
 
                 OrbitActionNode(
                     modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp)
-                        .offset(y = centerNodeOffset),
+                        .align(Alignment.TopEnd)
+                        .padding(end = 4.dp, top = 8.dp),
                     width = actionNodeWidth,
                     height = actionNodeHeight,
                     title = if (rewardTask != null) "立即领奖" else "今日任务",
@@ -522,22 +470,15 @@ private fun FutureRealmHero(
                     }
                 }
 
-                Surface(
+                // 挑战进度 - 显示在底部两个六边形上方
+                Text(
+                    text = "挑战进度 ${(completedRatio * 100).roundToInt()}%",
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(top = statusBadgeTopPadding, end = 4.dp),
-                    color = Color.White.copy(alpha = 0.18f),
-                    shape = RoundedCornerShape(18.dp),
-                    border = BorderStroke(1.dp, Color.White.copy(alpha = 0.24f))
-                ) {
-                    Text(
-                        text = if (rewardTask != null) "加油！" else "在线",
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
-                        color = AdventureRealmGlow,
-                        fontWeight = FontWeight.Bold,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = bottomNodeBottomPadding + actionNodeHeight + 6.dp),
+                    color = AdventureRealmTextPrimary,
+                    style = MaterialTheme.typography.labelMedium
+                )
             }
 
             RealmProgressPanel(adventure = adventure, progress = completedRatio)
@@ -633,107 +574,142 @@ private fun HologramStage(
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         Canvas(modifier = Modifier.fillMaxSize()) {
-            val baseWidth = size.width * 0.64f
+            val baseWidth = size.width * 0.88f
             val centerX = size.width / 2f
-            val baseY = size.height * 0.8f
+            val baseY = size.height * 0.74f
+            val towerTopTarget = size.height * 0.09f
 
+            // 底座椭圆光晕
             drawOval(
-                color = Color.White.copy(alpha = 0.09f),
-                topLeft = Offset(centerX - baseWidth * 0.72f, baseY - 42f),
-                size = Size(baseWidth * 1.44f, 84f),
+                color = AdventureRealmGlow.copy(alpha = 0.30f),
+                topLeft = Offset(centerX - baseWidth * 0.76f, baseY - 52f),
+                size = Size(baseWidth * 1.52f, 104f)
+            )
+            drawOval(
+                color = Color.White.copy(alpha = 0.12f),
+                topLeft = Offset(centerX - baseWidth * 0.72f, baseY - 44f),
+                size = Size(baseWidth * 1.44f, 88f),
                 style = Stroke(width = 3f)
             )
 
-            repeat(5) { index ->
-                val ringWidth = baseWidth - index * (baseWidth * 0.11f)
-                val ringHeight = 38f + index * 2f
-                val ringY = baseY - index * 58f
-                val alpha = 0.88f - index * 0.1f
+            // 8圈螺旋平台：底部最亮，逐渐向上变淡
+            val ringCount = 8
+            val ringSpacing = (baseY - towerTopTarget - 40f) / (ringCount - 1).toFloat()
+            repeat(ringCount) { index ->
+                val ringWidth = baseWidth - index * (baseWidth * 0.08f)
+                val ringHeight = 34f
+                val ringY = baseY - index * ringSpacing
+                // index 0=底部最亮(0.95)，index 7=顶部最淡(0.25)
+                val alpha = 0.95f - index * 0.10f
+                val strokeW = when (index) {
+                    0 -> 10f
+                    1 -> 8.5f
+                    2 -> 7f
+                    3 -> 6f
+                    else -> 4.5f
+                }
                 drawOval(
                     color = AdventureRealmGlow.copy(alpha = alpha),
                     topLeft = Offset(centerX - ringWidth / 2f, ringY),
                     size = Size(ringWidth, ringHeight),
-                    style = Stroke(width = if (index == 0) 8f else 6f)
+                    style = Stroke(width = strokeW)
                 )
+                // 内填充光：底亮顶暗
+                val fillAlpha = (0.22f - index * 0.025f).coerceAtLeast(0.02f)
                 drawOval(
-                    color = AdventureRealmGlowStrong.copy(alpha = 0.14f + index * 0.02f),
-                    topLeft = Offset(centerX - ringWidth * 0.36f, ringY + 7f),
-                    size = Size(ringWidth * 0.72f, ringHeight - 14f)
+                    color = AdventureRealmGlowStrong.copy(alpha = fillAlpha),
+                    topLeft = Offset(centerX - ringWidth * 0.38f, ringY + 8f),
+                    size = Size(ringWidth * 0.76f, ringHeight - 16f)
                 )
             }
 
-            val towerTopY = baseY - 58f * 4 - 42f
-            val leftX = centerX - baseWidth * 0.34f
-            val rightX = centerX + baseWidth * 0.34f
+            // 塔身侧线
+            val towerTopY = towerTopTarget
+            val leftX = centerX - baseWidth * 0.36f
+            val rightX = centerX + baseWidth * 0.36f
             drawLine(
-                color = AdventureRealmLine.copy(alpha = 0.42f),
-                start = Offset(leftX, baseY + 8f),
-                end = Offset(centerX - 24f, towerTopY),
-                strokeWidth = 3f,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        AdventureRealmLine.copy(alpha = 0.85f),
+                        AdventureRealmLine.copy(alpha = 0.18f)
+                    ),
+                    startY = towerTopY,
+                    endY = baseY
+                ),
+                start = Offset(leftX, baseY + 10f),
+                end = Offset(centerX - 20f, towerTopY),
+                strokeWidth = 4.5f,
                 cap = StrokeCap.Round
             )
             drawLine(
-                color = AdventureRealmLine.copy(alpha = 0.42f),
-                start = Offset(rightX, baseY + 8f),
-                end = Offset(centerX + 24f, towerTopY),
-                strokeWidth = 3f,
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        AdventureRealmLine.copy(alpha = 0.85f),
+                        AdventureRealmLine.copy(alpha = 0.18f)
+                    ),
+                    startY = towerTopY,
+                    endY = baseY
+                ),
+                start = Offset(rightX, baseY + 10f),
+                end = Offset(centerX + 20f, towerTopY),
+                strokeWidth = 4.5f,
                 cap = StrokeCap.Round
             )
+            // 中轴线
             drawLine(
-                color = AdventureRealmLine.copy(alpha = 0.2f),
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        AdventureRealmGlow.copy(alpha = 0.55f),
+                        AdventureRealmGlow.copy(alpha = 0.08f)
+                    ),
+                    startY = towerTopY,
+                    endY = baseY
+                ),
                 start = Offset(centerX, baseY + 18f),
-                end = Offset(centerX, towerTopY + 8f),
-                strokeWidth = 2f,
+                end = Offset(centerX, towerTopY + 10f),
+                strokeWidth = 3f,
                 cap = StrokeCap.Round
             )
 
-            repeat(6) { index ->
-                val y = baseY - index * 44f
+            // 塔身两侧能量节点（更多，交错）
+            repeat(9) { index ->
+                val y = baseY - index * (ringSpacing * 0.80f)
+                val side = if (index % 2 == 0) 1f else -1f
+                val dotAlpha = 0.65f - index * 0.05f
                 drawCircle(
-                    color = AdventureRealmGlow.copy(alpha = 0.45f - index * 0.05f),
-                    radius = 5f,
-                    center = Offset(centerX + if (index % 2 == 0) 42f else -38f, y)
+                    color = AdventureRealmGlow.copy(alpha = dotAlpha),
+                    radius = 7f - index * 0.3f,
+                    center = Offset(centerX + side * (baseWidth * 0.3f - index * 3f), y)
+                )
+                drawCircle(
+                    color = AdventureRealmGlowStrong.copy(alpha = dotAlpha * 0.5f),
+                    radius = 12f - index * 0.5f,
+                    center = Offset(centerX + side * (baseWidth * 0.3f - index * 3f), y)
                 )
             }
 
+            // 塔尖光晕（脉冲）
+            drawCircle(
+                color = AdventureRealmGlowStrong.copy(alpha = haloAlpha * 1.5f),
+                radius = 28f * glowScale,
+                center = Offset(centerX, towerTopY)
+            )
+            drawCircle(
+                color = AdventureRealmGlow.copy(alpha = 0.9f),
+                radius = 10f,
+                center = Offset(centerX, towerTopY)
+            )
+
+            // 动态光圈（底部大光晕）
             drawOval(
                 color = AdventureRealmGlow.copy(alpha = haloAlpha),
-                topLeft = Offset(centerX - baseWidth * 0.56f * glowScale, baseY - 22f * glowScale),
-                size = Size(baseWidth * 1.12f * glowScale, 44f * glowScale),
-                style = Stroke(width = 5f)
+                topLeft = Offset(centerX - baseWidth * 0.58f * glowScale, baseY - 24f * glowScale),
+                size = Size(baseWidth * 1.16f * glowScale, 48f * glowScale),
+                style = Stroke(width = 6f)
             )
         }
 
-        Column(
-            modifier = Modifier
-                .align(Alignment.Center)
-                .scale(glowScale)
-                .clip(RoundedCornerShape(22.dp))
-                .background(Color.White.copy(alpha = 0.08f))
-                .padding(horizontal = 18.dp, vertical = 12.dp),
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Lv.${adventure.currentLevel}",
-                color = AdventureRealmGlow,
-                fontWeight = FontWeight.ExtraBold,
-                style = MaterialTheme.typography.labelLarge
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = adventure.currentTitle,
-                color = AdventureRealmGlow,
-                fontWeight = FontWeight.ExtraBold,
-                style = MaterialTheme.typography.titleLarge,
-                textAlign = TextAlign.Center
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "本章完成 ${(progress * 100).roundToInt()}%",
-                color = AdventureRealmTextPrimary,
-                style = MaterialTheme.typography.bodySmall
-            )
-        }
+
     }
 }
 
@@ -770,33 +746,33 @@ private fun OrbitActionNode(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                .padding(horizontal = 10.dp, vertical = 10.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
             Box(
                 modifier = Modifier
-                    .size(40.dp)
+                    .size(32.dp)
                     .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.12f)),
+                    .background(Color.White.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     imageVector = icon,
                     contentDescription = title,
                     tint = AdventureRealmGlow,
-                    modifier = Modifier.size(22.dp)
+                    modifier = Modifier.size(17.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(7.dp))
             Text(
                 text = title,
                 color = AdventureRealmGlow,
                 fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.labelMedium,
                 textAlign = TextAlign.Center
             )
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(3.dp))
             Text(
                 text = subtitle,
                 color = AdventureRealmTextPrimary,

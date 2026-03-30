@@ -66,8 +66,8 @@ android {
 
 dependencies {
     // 核心库
-    implementation("androidx.core:core-ktx:1.12.0")
-    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.appcompat:appcompat:1.7.0")
 
     // Compose
     implementation(platform(libs.androidx.compose.bom))
@@ -83,7 +83,7 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")   // Gson 转换器
 
     // AndroidX WebView
-    implementation ("androidx.webkit:webkit:1.7.0")
+    implementation("androidx.webkit:webkit:1.12.1")
 
     // Hilt
     implementation("com.google.dagger:hilt-android:2.47")
@@ -109,7 +109,7 @@ dependencies {
     implementation("com.google.android.gms:play-services-ads:23.1.0")
     implementation("com.google.android.ump:user-messaging-platform:2.2.0")
     implementation("androidx.lifecycle:lifecycle-process:2.8.3")
-    implementation("io.sentry:sentry-android:7.14.0")
+    implementation("io.sentry:sentry-android:8.0.0")
 
     // Android 测试依赖
     testImplementation("junit:junit:4.13.2")

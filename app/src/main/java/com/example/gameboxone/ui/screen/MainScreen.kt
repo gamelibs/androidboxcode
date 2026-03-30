@@ -199,7 +199,7 @@ fun MainScreen(
                                 slideOutHorizontally(targetOffsetX = { -it }, animationSpec = tween(300))
                     }
                 ) {
-                    SettingScreen()
+                    SettingScreen(onBackClick = { navController.popBackStack() })
                 }
 
                 // 个人中心（带动画）
