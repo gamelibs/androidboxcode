@@ -199,7 +199,7 @@ private fun AdventureHomeContent(
         primaryTask?.let(::add)
         addAll(adventure.chapterTasks.filter { it.status != AdventureTaskStatus.LOCKED }.take(4))
     }.distinctBy { it.taskId }.take(4)
-    val gameDockItems = games.take(3)
+    val gameDockItems = games
     val quickGame = games.firstOrNull()
 
     LazyColumn(
@@ -1071,12 +1071,23 @@ private fun GameDockCard(
             color = AdventureRealmTextPrimary,
             style = MaterialTheme.typography.bodyMedium
         )
-        games.forEach { game ->
-            GameCardEnhanced(
-                game = game,
-                iconCacheManager = viewModel.iconCacheManager,
-                onClick = { onGameClick(game) }
-            )
+        games.chunked(2).forEach { rowGames ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                rowGames.forEach { game ->
+                    GameCardEnhanced(
+                        game = game,
+                        iconCacheManager = viewModel.iconCacheManager,
+                        onClick = { onGameClick(game) },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                if (rowGames.size == 1) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
         }
     }
 }
